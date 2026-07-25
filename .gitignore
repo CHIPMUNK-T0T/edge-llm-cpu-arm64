@@ -1,0 +1,18 @@
+# Model artifacts are governed separately and are too large for Git.
+*.gguf
+/models/
+
+# Local machine-specific configuration. Commit the example only.
+.lab-config.yaml
+
+# Local credentials and generated secrets.
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Local logs and build/export artifacts.
+*.log
+*.tar
+*.tar.gz

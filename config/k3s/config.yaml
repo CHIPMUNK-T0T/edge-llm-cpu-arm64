@@ -1,0 +1,3 @@
+# Restrict the cluster-admin kubeconfig to root and the local k3s operators.
+write-kubeconfig-mode: "0640"
+write-kubeconfig-group: k3s
