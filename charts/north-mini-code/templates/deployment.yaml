@@ -1,0 +1,160 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: north-mini-code
+  labels:
+    {{- include "north-mini-code.commonLabels" . | nindent 4 }}
+    app.kubernetes.io/component: inference
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "north-mini-code.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "north-mini-code.commonLabels" . | nindent 8 }}
+        app.kubernetes.io/component: inference
+    spec:
+      terminationGracePeriodSeconds: {{ .Values.serving.terminationGracePeriodSeconds }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: prepare-model
+          image: ghcr.io/ggml-org/llama.cpp:server-b10108@sha256:06ac0adfef3ce89ce7f080fbe129b4725362a6281ad110c8493fffd6393841c1
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - |
+              source_file="/source/North-Mini-Code-1.0-Q4_0.gguf"
+              target_file="/models/North-Mini-Code-1.0-Q4_0.gguf"
+              temporary_file="${target_file}.part"
+              expected_size="17521204800"
+              expected_sha256="e4803e44e2b97269deb3b33b1ea8d4309d06773ca5f07684f876bd8f751f4f86"
+
+              verify_file() {
+                candidate="$1"
+                test -f "$candidate"
+                actual_size="$(stat -c '%s' "$candidate")"
+                actual_sha256_line="$(sha256sum "$candidate")"
+                actual_sha256="${actual_sha256_line%% *}"
+                test "$actual_size" = "$expected_size"
+                test "$actual_sha256" = "$expected_sha256"
+              }
+
+              if verify_file "$target_file"; then
+                echo "Model already present and verified."
+                exit 0
+              fi
+
+              echo "Copying the pinned model into the PVC."
+              cp "$source_file" "$temporary_file"
+              verify_file "$temporary_file"
+              mv "$temporary_file" "$target_file"
+              echo "Model import and verification: PASS"
+          resources:
+            requests:
+              cpu: "1"
+              memory: 256Mi
+            limits:
+              cpu: "2"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: source-model
+              mountPath: /source
+              readOnly: true
+            - name: model
+              mountPath: /models
+      containers:
+        - name: llama-server
+          image: ghcr.io/ggml-org/llama.cpp:server-b10108@sha256:06ac0adfef3ce89ce7f080fbe129b4725362a6281ad110c8493fffd6393841c1
+          imagePullPolicy: IfNotPresent
+          args:
+            - --model
+            - /models/North-Mini-Code-1.0-Q4_0.gguf
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8080"
+            - --ctx-size
+            - {{ .Values.serving.contextSize | quote }}
+            - --threads
+            - {{ .Values.serving.threads | quote }}
+            - --threads-batch
+            - {{ .Values.serving.threads | quote }}
+            - --parallel
+            - "1"
+            - --jinja
+            - --metrics
+            - --ui
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          resources:
+            requests:
+              cpu: {{ .Values.serving.resources.requests.cpu | quote }}
+              memory: {{ .Values.serving.resources.requests.memory | quote }}
+            limits:
+              cpu: {{ .Values.serving.resources.limits.cpu | quote }}
+              memory: {{ .Values.serving.resources.limits.memory | quote }}
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: {{ .Values.serving.probes.startup.periodSeconds }}
+            timeoutSeconds: {{ .Values.serving.probes.startup.timeoutSeconds }}
+            failureThreshold: {{ .Values.serving.probes.startup.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: {{ .Values.serving.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.serving.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.serving.probes.readiness.failureThreshold }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: {{ .Values.serving.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.serving.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.serving.probes.liveness.failureThreshold }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: model
+              mountPath: /models
+              readOnly: true
+            - name: temporary
+              mountPath: /tmp
+      volumes:
+        - name: source-model
+          hostPath:
+            path: {{ .Values.model.sourcePath | quote }}
+            type: Directory
+        - name: model
+          persistentVolumeClaim:
+            claimName: north-mini-code-model
+        - name: temporary
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi

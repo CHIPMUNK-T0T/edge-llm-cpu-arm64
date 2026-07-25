@@ -14,7 +14,7 @@ clients, observe it, measure it, and recover it when it fails.
 | Host | Surface Laptop 7, Snapdragon X Elite, 64 GB RAM |
 | Host OS | Windows 11 ARM64 |
 | Linux runtime | WSL2 Ubuntu ARM64; 48 GB configured ceiling, 46 GiB observed |
-| Orchestrator | single-node K3s |
+| Orchestrator | single-node K3s; Helm 4.2.0 deployment client |
 | Inference runtime | official versioned `llama.cpp` `llama-server` ARM64 image |
 | Model | North Mini Code 1.0 Q4_0 GGUF |
 | Remote network | private Tailscale tailnet |
@@ -25,17 +25,23 @@ the fixed Phase 1 baseline. Context size, threads, resource settings, and other
 explicitly varied inference controls are experiment parameters. Record their
 values with results.
 
+The `charts/north-mini-code` chart is the only serving definition in the
+current repository. The earlier raw serving manifests were removed after the
+chart passed static rendering and K3s API validation. The existing Deployment,
+Service, and bound model PVC were then transferred in place to Helm release
+`north-mini-code`; their object UIDs and the Service ClusterIP were preserved.
+
 ## Logical architecture
 
 ```text
 [Android client] ----\
                     +-- Tailscale --> [Gateway / ingress] --> [K3s Service]
 [External PC] ------/                                      |
-                                                        [llama-server Pod]
-                                                               |
-                                                             [PVC]
-                                                               |
-                                                          [GGUF model]
+                                                     [Helm-managed Pod]
+                                                        /          \
+                                             [model init]      [llama-server]
+                                                   |                 |
+                                           [host GGUF] ---------> [PVC]
 
 [Prometheus] <--- metrics / exporter --- gateway and workload
       |
@@ -51,6 +57,7 @@ values with results.
 | Tailscale | Private, encrypted connectivity between enrolled devices | Application authentication or request policy |
 | Gateway / ingress | Only supported entry point; reverse proxy, request policy, and telemetry | Direct model inference |
 | K3s | Scheduling and lifecycle of in-cluster workloads | Multi-node availability |
+| Helm chart | Declarative serving configuration, release history, upgrade, and rollback | Preserving availability on this single node |
 | `llama-server` | OpenAI-compatible inference and streaming | Public exposure or durable authorization |
 | PVC | Model storage persistence within the lab | Distributed storage durability |
 | Android client | End-to-end streaming and client-side experience measurements | Product-grade UX or distribution |
@@ -82,6 +89,18 @@ values with results.
   `kubectl port-forward` only to `127.0.0.1` and verify the K3s-hosted embedded
   UI from the Windows browser. This is a temporary operator path, not the final
   ingress architecture.
+- **One Helm source:** do not retain raw serving manifests beside the chart.
+  Git history preserves Phase 1; keeping two active definitions would create
+  configuration drift without adding portfolio value.
+- **Model preparation in the Pod lifecycle:** an init container copies the
+  pinned host GGUF only when the PVC does not contain the verified artifact and
+  checks its exact size and SHA-256 before inference starts. This avoids a race
+  between an import Job and the Deployment, at the cost of verifying the 17 GB
+  file on each Pod start.
+- **Retained model PVC:** Helm owns the PVC but marks it with
+  `helm.sh/resource-policy: keep`. Uninstalling the release must not discard the
+  costly verified artifact; reinstall therefore requires an explicit ownership
+  step for the retained claim.
 
 ## Success criteria
 

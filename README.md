@@ -10,17 +10,14 @@ to use the service through a gateway. The focus is the engineering process:
 architecture, deployment, observability, benchmarks, failure recovery, and
 documented trade-offs.
 
-> Status (2026-07-25): Phase 0 passed. K3s, ARM64 scheduling, ClusterIP/DNS,
-> metrics, and local-path PVC read/write are verified. Phase 1 passed:
-> North Mini Code Q4_0 is downloaded, verified, and accepted as the initial
-> serving model. Upstream llama.cpp explicitly supports its Cohere2MoE
-> architecture and North Code chat format. The official versioned ARM64
-> `llama-server` image is selected with its platform digest. Local validation
-> passed for Web UI, exact official chat template, tokenizer IDs, single-turn,
-> typed-content, multi-turn, stop, and streaming behavior. One K3s inference
-> Pod now loads the model from a verified PVC, reaches Ready with zero restarts,
-> and serves its embedded Web UI and chat API to Windows through a
-> localhost-only port-forward.
+> Status (2026-07-25): Phases 0 and 1 passed. The ARM64 K3s foundation, pinned
+> North Mini Code Q4_0 artifact, official `llama-server` runtime, one Ready
+> inference Pod, Windows-local Web UI, and chat API are verified. Phase 2 is in
+> progress: the Helm chart is now the repository's only serving definition, and
+> Helm 4.2.0 lint, template, schema, and K3s server-side dry-run checks pass. The
+> existing Deployment, Service, and model PVC were transferred without changing
+> their UIDs or deleting model data. Helm release revision 1 is deployed, and
+> init verification, Ready state, Web UI, health, and chat API checks pass.
 
 ## Demonstrated so far
 
@@ -28,10 +25,12 @@ documented trade-offs.
 - Single-node Kubernetes operations with K3s
 - Pinned model provenance, runtime digest, and reproducible model placement
 - Windows-local Web UI and API access to the K3s-hosted workload
+- Statically validated Helm packaging without changing the live workload
+- Helm ownership migration while preserving the bound model PVC
 
 ## Planned portfolio scope
 
-- Helm packaging, upgrades, and rollback
+- Controlled Helm upgrade, rollback, uninstall/reinstall, and streaming verification
 - Private external access through Tailscale and a gateway
 - LLM performance and operational observability
 - Failure diagnosis and recovery under realistic resource constraints
@@ -75,13 +74,16 @@ host and WSL2 baseline.
 - [Official llama-server ARM64 validation](docs/verification/official-llama-server-arm64-2026-07-24.md)
 - [Official ARM64 runtime decision](docs/adr/0003-use-official-llama-server-arm64-image.md)
 - [K3s inference and Windows-local Web UI verification](docs/verification/north-mini-code-k3s-serving-2026-07-25.md)
+- [Helm packaging and PVC lifecycle decision](docs/adr/0004-use-helm-as-serving-source-of-truth.md)
+- [Helm static validation](docs/verification/north-mini-code-helm-static-2026-07-25.md)
+- [Helm ownership migration and install verification](docs/verification/north-mini-code-helm-install-2026-07-25.md)
 
 ## Repository map
 
 - `config/` — host/K3s configuration under version control
-- `scripts/` — reproducible installation and model-download entry points
-- `kubernetes/` — manifests and infrastructure validation workloads
-- `charts/` — Helm chart (planned)
+- `scripts/` — reproducible K3s, Helm, and model-download entry points
+- `kubernetes/` — foundation and storage validation workloads
+- `charts/` — current Helm deployment source for the inference workload
 - `gateway/` — reverse-proxy and access policy (planned)
 - `monitoring/` — metrics and dashboards (planned)
 - `benchmark/` — repeatable inputs and raw results

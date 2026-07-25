@@ -1,0 +1,27 @@
+model:
+  sourcePath: /home/your-user/work/edge-llm-cpu-arm64/models/north-mini-code
+
+serving:
+  contextSize: 4096
+  threads: 12
+  resources:
+    requests:
+      cpu: "4"
+      memory: 24Gi
+    limits:
+      cpu: "12"
+      memory: 40Gi
+  probes:
+    startup:
+      periodSeconds: 5
+      timeoutSeconds: 2
+      failureThreshold: 120
+    readiness:
+      periodSeconds: 10
+      timeoutSeconds: 2
+      failureThreshold: 3
+    liveness:
+      periodSeconds: 30
+      timeoutSeconds: 2
+      failureThreshold: 3
+  terminationGracePeriodSeconds: 120

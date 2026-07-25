@@ -1,4 +1,3 @@
-# Copy this file to .lab-config.yaml and replace the placeholders locally.
+# Copy this file to .lab-config.yaml and replace the placeholder locally.
 # .lab-config.yaml is ignored by Git because it contains machine-specific data.
 operatorUser: your-user
-modelSourcePath: /home/your-user/work/edge-llm-cpu-arm64/models/north-mini-code

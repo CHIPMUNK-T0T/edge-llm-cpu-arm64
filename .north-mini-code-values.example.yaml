@@ -1,0 +1,4 @@
+# Copy this file to .north-mini-code-values.yaml and replace the placeholder.
+# The local file is ignored by Git and supplies machine-specific Helm values.
+model:
+  sourcePath: /home/your-user/work/edge-llm-cpu-arm64/models/north-mini-code

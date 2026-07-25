@@ -58,18 +58,36 @@ and [deployment smoke result](benchmark/results/north-mini-code-q4-0-k3s-smoke-2
 
 ## Phase 2 — Helm and lifecycle operations
 
-**Status:** pending.
+**Status:** in progress; static packaging gate passed on 2026-07-25.
 
-- Package the current single-replica workload in a Helm chart.
-- Expose the environment and experiment inputs that need to vary: model source
-  path, context size, threads, CPU and memory resources, probes, and termination
-  grace period.
-- Keep the verified model identity, quantization, artifact hash, runtime image
+Completed:
+
+- Replaced the raw serving manifests and their renderer with one Helm chart.
+- Exposed only the environment and experiment inputs that need to vary: model
+  source path, context size, threads, CPU and memory resources, probes, and
+  termination grace period.
+- Kept the verified model identity, quantization, artifact hash, runtime image
   digest, one-replica `Recreate` strategy, ClusterIP Service, security controls,
   Jinja support, metrics, and embedded Web UI fixed in this baseline.
-- Run `helm lint`, render the chart, and perform a K3s dry-run before install.
-- Exercise install, controlled upgrade, rollback, and uninstall.
+- Pinned and checksum-verified the official Helm 4.2.0 Linux ARM64 client.
+- Passed strict chart lint, values schema checks, template rendering, and K3s
+  server-side dry-run without changing the live workload.
+- Transferred the existing Deployment, Service, and bound model PVC to Helm
+  release revision 1 without changing their UIDs or deleting model data.
+- Verified init model integrity, `1/1` Ready with zero restarts, ClusterIP and
+  Windows-local Web UI/health, and the fixed non-streaming chat smoke input.
+- Removed the superseded completed model import Job from the live namespace.
+
+Remaining:
+
+- Exercise controlled upgrade, rollback, uninstall, and reinstall with the
+  retained PVC.
 - Record one explicit SSE streaming check through the Helm-managed K3s Service.
+
+**Static evidence:** [Helm static validation](docs/verification/north-mini-code-helm-static-2026-07-25.md)
+and [ADR-0004](docs/adr/0004-use-helm-as-serving-source-of-truth.md).
+
+**Install evidence:** [Helm ownership migration](docs/verification/north-mini-code-helm-install-2026-07-25.md).
 
 ## Phase 3 — Private external access
 

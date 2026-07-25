@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: north-mini-code-model
+  labels:
+    {{- include "north-mini-code.commonLabels" . | nindent 4 }}
+    app.kubernetes.io/component: model-storage
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 24Gi
+  storageClassName: local-path
