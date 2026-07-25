@@ -1,0 +1,15 @@
+model:
+  name: North-Mini-Code-1.0
+  source:
+    repository: CohereLabs/North-Mini-Code-1.0
+    revision: d11e61a842617a22dc328552fa5bb86231ee4f37
+    license: Apache-2.0
+  artifact:
+    repository: bartowski/North-Mini-Code-1.0-GGUF
+    revision: 6ff6563002170723a6f7a672bf4c99775be6c0dd
+    filename: North-Mini-Code-1.0-Q4_0.gguf
+    format: GGUF
+    quantization: Q4_0
+    sizeBytes: 17521204800
+    sha256: e4803e44e2b97269deb3b33b1ea8d4309d06773ca5f07684f876bd8f751f4f86
+    provenance: third-party-conversion
