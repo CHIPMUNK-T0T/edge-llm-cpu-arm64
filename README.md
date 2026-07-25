@@ -16,8 +16,10 @@ documented trade-offs.
 > progress: the Helm chart is now the repository's only serving definition, and
 > Helm 4.2.0 lint, template, schema, and K3s server-side dry-run checks pass. The
 > existing Deployment, Service, and model PVC were transferred without changing
-> their UIDs or deleting model data. Helm release revision 1 is deployed, and
-> init verification, Ready state, Web UI, health, and chat API checks pass.
+> their UIDs or deleting model data. A controlled context-size upgrade and
+> rollback passed; Helm release revision 4 now runs the original 4096-token
+> baseline. Init verification, Ready state, Web UI, health, and chat API checks
+> pass after rollback.
 
 ## Demonstrated so far
 
@@ -27,10 +29,11 @@ documented trade-offs.
 - Windows-local Web UI and API access to the K3s-hosted workload
 - Statically validated Helm packaging without changing the live workload
 - Helm ownership migration while preserving the bound model PVC
+- Controlled Helm values upgrade and rollback with workload verification
 
 ## Planned portfolio scope
 
-- Controlled Helm upgrade, rollback, uninstall/reinstall, and streaming verification
+- Helm uninstall/reinstall with retained storage and streaming verification
 - Private external access through Tailscale and a gateway
 - LLM performance and operational observability
 - Failure diagnosis and recovery under realistic resource constraints
@@ -77,6 +80,7 @@ host and WSL2 baseline.
 - [Helm packaging and PVC lifecycle decision](docs/adr/0004-use-helm-as-serving-source-of-truth.md)
 - [Helm static validation](docs/verification/north-mini-code-helm-static-2026-07-25.md)
 - [Helm ownership migration and install verification](docs/verification/north-mini-code-helm-install-2026-07-25.md)
+- [Helm controlled upgrade and rollback](docs/verification/north-mini-code-helm-upgrade-rollback-2026-07-25.md)
 
 ## Repository map
 

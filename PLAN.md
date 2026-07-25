@@ -58,7 +58,8 @@ and [deployment smoke result](benchmark/results/north-mini-code-q4-0-k3s-smoke-2
 
 ## Phase 2 — Helm and lifecycle operations
 
-**Status:** in progress; static packaging gate passed on 2026-07-25.
+**Status:** in progress; steps 2-1 through 2-4 passed on 2026-07-25. The 2-5
+Phase 2 exit gate remains.
 
 Completed:
 
@@ -77,17 +78,23 @@ Completed:
 - Verified init model integrity, `1/1` Ready with zero restarts, ClusterIP and
   Windows-local Web UI/health, and the fixed non-streaming chat smoke input.
 - Removed the superseded completed model import Job from the live namespace.
+- Upgraded context size from 4096 to 3072 through a local values file, verified
+  the effective Pod arguments and serving path, and rolled back to revision 1.
+- Verified the rollback as release revision 4 with context size 4096, zero Pod
+  restarts, unchanged Deployment/Service/PVC identities, and a working UI,
+  health endpoint, and fixed chat input.
 
 Remaining:
 
-- Exercise controlled upgrade, rollback, uninstall, and reinstall with the
-  retained PVC.
+- Exercise uninstall and reinstall with the retained PVC.
 - Record one explicit SSE streaming check through the Helm-managed K3s Service.
 
 **Static evidence:** [Helm static validation](docs/verification/north-mini-code-helm-static-2026-07-25.md)
 and [ADR-0004](docs/adr/0004-use-helm-as-serving-source-of-truth.md).
 
 **Install evidence:** [Helm ownership migration](docs/verification/north-mini-code-helm-install-2026-07-25.md).
+
+**Lifecycle evidence:** [controlled upgrade and rollback](docs/verification/north-mini-code-helm-upgrade-rollback-2026-07-25.md).
 
 ## Phase 3 — Private external access
 

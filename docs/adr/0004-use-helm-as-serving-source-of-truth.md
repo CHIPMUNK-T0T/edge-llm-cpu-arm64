@@ -53,12 +53,20 @@ separate gate from static chart validation.
 - Every Pod start verifies the 17 GB artifact before inference, increasing
   startup time; this cost must be measured rather than hidden.
 - The host model directory remains a single-node, environment-specific input.
-- Release uninstall preserves model bytes but leaves an orphaned PVC that must
-  be explicitly adopted on reinstall.
+- Release uninstall preserves model bytes but leaves a retained PVC. A
+  same-name, same-namespace reinstall may accept its existing Helm ownership
+  metadata; normal dry-run and install must be attempted before considering an
+  explicit ownership takeover.
 - Helm cannot provide availability during a `Recreate` rollout on this
   single-node, one-replica lab.
-- Static validation does not prove live install, upgrade, rollback, uninstall,
-  Web UI, API, or SSE behavior. Those remain Phase 2 lifecycle gates.
+- `--take-ownership` adopts Helm metadata but does not remove every legacy
+  Kubernetes managed-field owner. The first field-changing upgrade after the
+  Phase 1 migration required a reviewed, one-time `--force-conflicts` apply to
+  transfer the `args` field from `kubectl-client-side-apply` to Helm. This is
+  not a default flag for later upgrades.
+- Static validation alone does not prove lifecycle or serving behavior. Live
+  install, upgrade, rollback, Web UI, health, and chat checks have passed;
+  uninstall/reinstall and explicit SSE remain separate gates.
 
 ## Validation
 
@@ -70,6 +78,6 @@ separate gate from static chart validation.
 6. Verify init completion, Ready state, Web UI, chat API, controlled upgrade,
    rollback, uninstall/reinstall behavior, and explicit SSE streaming.
 
-Steps 1 through 5 and the init, Ready, Web UI, health, and non-streaming chat
-parts of step 6 passed on 2026-07-25. Upgrade, rollback, uninstall/reinstall, and
-explicit SSE checks remain open.
+Steps 1 through 5 and the init, Ready, Web UI, health, non-streaming chat,
+controlled upgrade, and rollback parts of step 6 passed on 2026-07-25.
+Uninstall/reinstall and explicit SSE checks remain open.

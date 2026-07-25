@@ -53,9 +53,12 @@ helm install north-mini-code charts/north-mini-code \
   --timeout 15m
 ```
 
-`--take-ownership` is required for this one-time migration and for a reinstall
-that adopts the PVC retained by an earlier uninstall. A clean install with no
-same-named resources does not require it.
+`--take-ownership` was required for this verified one-time migration. Do not
+assume it is required for a reinstall with a retained PVC: inspect the retained
+ownership annotations and try the normal server-side dry-run and install first.
+Use `--take-ownership` only if Helm reports an ownership conflict, after
+reviewing the conflicting metadata. A clean install with no same-named
+resources does not require it.
 
 Verify the release and workload:
 
@@ -85,8 +88,51 @@ curl --fail http://localhost:18080/health
 The embedded UI asset is gzip encoded. Command-line UI checks must advertise
 gzip support with `curl --compressed`; normal browsers already do this.
 
-Controlled upgrade, rollback, uninstall/reinstall, and explicit SSE validation
-remain the next Phase 2 gate.
+## Controlled upgrade and rollback
+
+Change experiment inputs in the ignored `.north-mini-code-values.yaml`, review
+the server-side dry-run, and then upgrade with the same file:
+
+```bash
+helm upgrade north-mini-code charts/north-mini-code \
+  --namespace edge-llm \
+  -f .north-mini-code-values.yaml \
+  --kubeconfig /etc/rancher/k3s/k3s.yaml \
+  --dry-run=server
+
+helm upgrade north-mini-code charts/north-mini-code \
+  --namespace edge-llm \
+  -f .north-mini-code-values.yaml \
+  --kubeconfig /etc/rancher/k3s/k3s.yaml \
+  --wait=watcher \
+  --timeout 15m
+```
+
+The verified Phase 1 migration had one additional ownership step. Its first
+field-changing upgrade found that `kubectl-client-side-apply` still owned the
+container `args`, even though `--take-ownership` had adopted the resources. A
+reviewed, one-time retry added `--force-conflicts` to transfer that field to
+Helm without replacing the Deployment. Do not use this flag for routine
+upgrades or unrelated conflicts.
+
+List revisions and roll back to an explicitly selected known-good revision:
+
+```bash
+helm history north-mini-code \
+  --namespace edge-llm \
+  --kubeconfig /etc/rancher/k3s/k3s.yaml
+
+read -r -p "Known-good Helm revision: " REVISION_TO_RESTORE
+helm rollback north-mini-code "$REVISION_TO_RESTORE" \
+  --namespace edge-llm \
+  --kubeconfig /etc/rancher/k3s/k3s.yaml \
+  --wait=watcher \
+  --timeout 15m
+```
+
+Restore the ignored local values file to the rolled-back baseline before the
+next upgrade. Otherwise a later upgrade can reapply the experimental value.
+Uninstall/reinstall and explicit SSE validation remain open Phase 2 gates.
 
 ## K3s credentials
 
