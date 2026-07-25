@@ -1,0 +1,23 @@
+{
+  "name": "north-mini-code-q4-0-k3s-smoke",
+  "classification": "K3s deployment smoke input; not a comparative benchmark",
+  "api": "/v1/chat/completions",
+  "requests": [
+    {
+      "id": "code-smoke",
+      "repeat": 1,
+      "body": {
+        "model": "North-Mini-Code-1.0-Q4_0.gguf",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Write a Python function add(a, b) that returns their sum. Reply with code only."
+          }
+        ],
+        "max_tokens": 256,
+        "temperature": 0,
+        "stream": false
+      }
+    }
+  ]
+}

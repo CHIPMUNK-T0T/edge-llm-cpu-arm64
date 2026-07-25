@@ -1,0 +1,55 @@
+{
+  "name": "north-mini-code-q4-0-k3s-smoke",
+  "date": "2026-07-25",
+  "classification": "deployment smoke observation; not a comparative performance verdict",
+  "environment": {
+    "orchestrator": "k3s v1.36.2+k3s1",
+    "architecture": "linux/arm64",
+    "replicas": 1,
+    "context_tokens": 4096,
+    "parallel_slots": 1,
+    "cpu_request": "4",
+    "cpu_limit": "12",
+    "memory_request": "24Gi",
+    "memory_limit": "40Gi"
+  },
+  "request": {
+    "source": "benchmark/inputs/north-mini-code-q4-0-k3s-smoke.json#code-smoke",
+    "max_tokens": 256,
+    "temperature": 0,
+    "stream": false
+  },
+  "response": {
+    "finish_reason": "stop",
+    "content": "def add(a, b):\n    return a + b",
+    "prompt_tokens": 135,
+    "completion_tokens": 76,
+    "total_tokens": 211,
+    "timings": {
+      "cached_prompt_tokens": 107,
+      "uncached_prompt_tokens": 28,
+      "uncached_prompt_ms": 1206.98,
+      "uncached_prompt_tokens_per_second": 23.198395996619663,
+      "predicted_tokens": 76,
+      "predicted_ms": 13105.688,
+      "predicted_tokens_per_second": 5.799008796791133
+    }
+  },
+  "resource_snapshot": {
+    "kubectl_top_memory_mib": 16598,
+    "cgroup_memory_current_bytes": 34148413440,
+    "cgroup_memory_peak_bytes": 34149617664,
+    "cgroup_anon_bytes": 17294536704,
+    "cgroup_file_bytes": 16817082368,
+    "wsl_available_gib_rounded": 28,
+    "wsl_swap_used_bytes": 0,
+    "cgroup_oom_events": 0,
+    "cgroup_oom_kill_events": 0,
+    "pod_restarts": 0
+  },
+  "limitations": [
+    "This is one functional smoke request, not a statistically controlled benchmark.",
+    "The cgroup total includes reclaimable memory-mapped model file cache.",
+    "Recovery, concurrency, long-context, and external-access tests were not run."
+  ]
+}

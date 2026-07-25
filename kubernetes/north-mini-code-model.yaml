@@ -1,0 +1,111 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: edge-llm
+  labels:
+    app.kubernetes.io/part-of: edge-llm-platform
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: north-mini-code-model
+  namespace: edge-llm
+  labels:
+    app.kubernetes.io/name: north-mini-code
+    app.kubernetes.io/component: model-storage
+    app.kubernetes.io/part-of: edge-llm-platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 24Gi
+  storageClassName: local-path
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: import-north-mini-code-model
+  namespace: edge-llm
+  labels:
+    app.kubernetes.io/name: north-mini-code
+    app.kubernetes.io/component: model-import
+    app.kubernetes.io/part-of: edge-llm-platform
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: north-mini-code
+        app.kubernetes.io/component: model-import
+        app.kubernetes.io/part-of: edge-llm-platform
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: import
+          image: ghcr.io/ggml-org/llama.cpp:server-b10108@sha256:06ac0adfef3ce89ce7f080fbe129b4725362a6281ad110c8493fffd6393841c1
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - |
+              source_file="/source/North-Mini-Code-1.0-Q4_0.gguf"
+              target_file="/models/North-Mini-Code-1.0-Q4_0.gguf"
+              temporary_file="${target_file}.part"
+              expected_size="17521204800"
+              expected_sha256="e4803e44e2b97269deb3b33b1ea8d4309d06773ca5f07684f876bd8f751f4f86"
+
+              verify_file() {
+                candidate="$1"
+                actual_size="$(stat -c '%s' "$candidate")"
+                actual_sha256_line="$(sha256sum "$candidate")"
+                actual_sha256="${actual_sha256_line%% *}"
+                test "$actual_size" = "$expected_size"
+                test "$actual_sha256" = "$expected_sha256"
+              }
+
+              if [ -f "$target_file" ] && verify_file "$target_file"; then
+                echo "Model already present and verified."
+                exit 0
+              fi
+
+              echo "Copying the pinned model into the PVC."
+              cp "$source_file" "$temporary_file"
+              verify_file "$temporary_file"
+              mv "$temporary_file" "$target_file"
+              echo "Model import and verification: PASS"
+          resources:
+            requests:
+              cpu: "1"
+              memory: 256Mi
+            limits:
+              cpu: "2"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: source-model
+              mountPath: /source
+              readOnly: true
+            - name: model
+              mountPath: /models
+      volumes:
+        - name: source-model
+          hostPath:
+            path: /home/your-user/work/edge-llm-cpu-arm64/models/north-mini-code
+            type: Directory
+        - name: model
+          persistentVolumeClaim:
+            claimName: north-mini-code-model

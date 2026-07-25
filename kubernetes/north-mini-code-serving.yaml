@@ -1,0 +1,126 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: north-mini-code
+  namespace: edge-llm
+  labels:
+    app.kubernetes.io/name: north-mini-code
+    app.kubernetes.io/component: inference
+    app.kubernetes.io/part-of: edge-llm-platform
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: north-mini-code
+      app.kubernetes.io/component: inference
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: north-mini-code
+        app.kubernetes.io/component: inference
+        app.kubernetes.io/part-of: edge-llm-platform
+    spec:
+      terminationGracePeriodSeconds: 120
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: llama-server
+          image: ghcr.io/ggml-org/llama.cpp:server-b10108@sha256:06ac0adfef3ce89ce7f080fbe129b4725362a6281ad110c8493fffd6393841c1
+          imagePullPolicy: IfNotPresent
+          args:
+            - --model
+            - /models/North-Mini-Code-1.0-Q4_0.gguf
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8080"
+            - --ctx-size
+            - "4096"
+            - --threads
+            - "12"
+            - --threads-batch
+            - "12"
+            - --parallel
+            - "1"
+            - --jinja
+            - --metrics
+            - --ui
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          resources:
+            requests:
+              cpu: "4"
+              memory: 24Gi
+            limits:
+              cpu: "12"
+              memory: 40Gi
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 120
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 2
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: model
+              mountPath: /models
+              readOnly: true
+            - name: temporary
+              mountPath: /tmp
+      volumes:
+        - name: model
+          persistentVolumeClaim:
+            claimName: north-mini-code-model
+        - name: temporary
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: north-mini-code
+  namespace: edge-llm
+  labels:
+    app.kubernetes.io/name: north-mini-code
+    app.kubernetes.io/component: inference
+    app.kubernetes.io/part-of: edge-llm-platform
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: north-mini-code
+    app.kubernetes.io/component: inference
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP

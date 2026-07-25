@@ -34,8 +34,9 @@ When a change affects architecture, deployment, operation, or a measured result:
 3. Update `PLAN.md` when a milestone is completed or re-scoped.
 4. Add an ADR in `docs/adr/` for a durable, non-trivial decision; include the
    context, alternatives, decision, consequences, and validation method.
-5. Put benchmark inputs and results in `benchmark/`, and failure reproduction
-   plus recovery notes in `failure-tests/`.
+5. Put benchmark inputs and results in `benchmark/`, and controlled recovery
+   experiments in `docs/verification/recovery/`. Do not commit incidental
+   development dead-end history.
 
 Do not create an ADR for trivial implementation details. Keep these documents
 short, factual, and current.
