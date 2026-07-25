@@ -26,10 +26,8 @@ explicitly varied inference controls are experiment parameters. Record their
 values with results.
 
 The `charts/north-mini-code` chart is the only serving definition in the
-current repository. The earlier raw serving manifests were removed after the
-chart passed static rendering and K3s API validation. The existing Deployment,
-Service, and bound model PVC were then transferred in place to Helm release
-`north-mini-code`; their object UIDs and the Service ClusterIP were preserved.
+current repository. It manages one Deployment, one ClusterIP Service, and one
+retained model PVC through Helm release `north-mini-code`.
 
 ## Logical architecture
 
@@ -90,8 +88,8 @@ Service, and bound model PVC were then transferred in place to Helm release
   UI from the Windows browser. This is a temporary operator path, not the final
   ingress architecture.
 - **One Helm source:** do not retain raw serving manifests beside the chart.
-  Git history preserves Phase 1; keeping two active definitions would create
-  configuration drift without adding portfolio value.
+  The Helm chart is the only serving definition, avoiding configuration drift
+  from parallel deployment paths.
 - **Model preparation in the Pod lifecycle:** an init container copies the
   pinned host GGUF only when the PVC does not contain the verified artifact and
   checks its exact size and SHA-256 before inference starts. This avoids a race
@@ -99,8 +97,9 @@ Service, and bound model PVC were then transferred in place to Helm release
   file on each Pod start.
 - **Retained model PVC:** Helm owns the PVC but marks it with
   `helm.sh/resource-policy: keep`. Uninstalling the release must not discard the
-  costly verified artifact; reinstall therefore requires an explicit ownership
-  step for the retained claim.
+  costly verified artifact. A verified same-name, same-namespace reinstall
+  accepted the retained claim through the normal Helm install path. The normal
+  server-side dry-run and install are the documented reinstall procedure.
 
 ## Success criteria
 

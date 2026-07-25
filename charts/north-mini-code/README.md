@@ -1,8 +1,8 @@
 # North Mini Code Helm chart
 
 This chart is the only deployment source for the North Mini Code Q4_0 serving
-workload. It targets the repository's single-node ARM64 K3s lab and preserves
-the verified Phase 1 model and runtime baseline.
+workload. It targets the repository's single-node ARM64 K3s lab and uses the
+verified model and runtime baseline.
 
 The chart creates one `Recreate` Deployment, one ClusterIP Service, and one
 24 GiB local-path PVC. An init container imports and verifies the pinned GGUF
@@ -30,35 +30,31 @@ helm lint charts/north-mini-code --strict -f .north-mini-code-values.yaml
 helm template north-mini-code charts/north-mini-code \
   --namespace edge-llm \
   -f .north-mini-code-values.yaml
-helm template north-mini-code charts/north-mini-code \
+helm install north-mini-code charts/north-mini-code \
   --namespace edge-llm \
-  -f .north-mini-code-values.yaml |
-  kubectl apply --dry-run=server -n edge-llm -f -
+  --create-namespace \
+  -f .north-mini-code-values.yaml \
+  --kubeconfig /etc/rancher/k3s/k3s.yaml \
+  --dry-run=server
 ```
 
 These commands do not install the chart.
 
-## Verified Phase 1 ownership migration
+## Install
 
-The first live install adopted the same-named Phase 1 Deployment, Service, and
-PVC in place:
+Install the chart through its normal path. The chart does not create a
+Namespace object, so the first install asks Helm to create the release
+namespace:
 
 ```bash
 helm install north-mini-code charts/north-mini-code \
   --namespace edge-llm \
+  --create-namespace \
   -f .north-mini-code-values.yaml \
   --kubeconfig /etc/rancher/k3s/k3s.yaml \
-  --take-ownership \
   --wait=watcher \
   --timeout 15m
 ```
-
-`--take-ownership` was required for this verified one-time migration. Do not
-assume it is required for a reinstall with a retained PVC: inspect the retained
-ownership annotations and try the normal server-side dry-run and install first.
-Use `--take-ownership` only if Helm reports an ownership conflict, after
-reviewing the conflicting metadata. A clean install with no same-named
-resources does not require it.
 
 Verify the release and workload:
 
@@ -66,15 +62,20 @@ Verify the release and workload:
 helm status north-mini-code \
   --kubeconfig /etc/rancher/k3s/k3s.yaml \
   --namespace edge-llm
-kubectl get deployment,pod,service,pvc -n edge-llm
-kubectl logs -n edge-llm deployment/north-mini-code -c prepare-model
+kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml \
+  get deployment,pod,service,pvc --namespace edge-llm
+kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml \
+  logs deployment/north-mini-code \
+  --namespace edge-llm \
+  --container prepare-model
 ```
 
 In a separate terminal, start the localhost-only operator path:
 
 ```bash
-kubectl port-forward --address=127.0.0.1 \
+kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml \
   --namespace edge-llm \
+  port-forward --address=127.0.0.1 \
   service/north-mini-code 18080:8080
 ```
 
@@ -108,13 +109,6 @@ helm upgrade north-mini-code charts/north-mini-code \
   --timeout 15m
 ```
 
-The verified Phase 1 migration had one additional ownership step. Its first
-field-changing upgrade found that `kubectl-client-side-apply` still owned the
-container `args`, even though `--take-ownership` had adopted the resources. A
-reviewed, one-time retry added `--force-conflicts` to transfer that field to
-Helm without replacing the Deployment. Do not use this flag for routine
-upgrades or unrelated conflicts.
-
 List revisions and roll back to an explicitly selected known-good revision:
 
 ```bash
@@ -132,7 +126,39 @@ helm rollback north-mini-code "$REVISION_TO_RESTORE" \
 
 Restore the ignored local values file to the rolled-back baseline before the
 next upgrade. Otherwise a later upgrade can reapply the experimental value.
-Uninstall/reinstall and explicit SSE validation remain open Phase 2 gates.
+
+## Uninstall and reinstall with retained model storage
+
+Uninstall removes the Deployment, Pod, and Service. The model PVC is retained
+by `helm.sh/resource-policy: keep`:
+
+```bash
+helm uninstall north-mini-code \
+  --namespace edge-llm \
+  --kubeconfig /etc/rancher/k3s/k3s.yaml \
+  --wait \
+  --timeout 10m
+
+kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml \
+  get pvc north-mini-code-model --namespace edge-llm
+```
+
+Reinstall with the same release name and namespace through the normal install
+path:
+
+```bash
+helm install north-mini-code charts/north-mini-code \
+  --namespace edge-llm \
+  --create-namespace \
+  -f .north-mini-code-values.yaml \
+  --kubeconfig /etc/rancher/k3s/k3s.yaml \
+  --wait=watcher \
+  --timeout 15m
+```
+
+The verified reinstall reused the retained PVC and exact model SHA without
+copying the 17 GB artifact again. The PVC protects this Helm lifecycle path,
+but it is not a backup: deleting the PVC can delete the local-path PV data.
 
 ## K3s credentials
 

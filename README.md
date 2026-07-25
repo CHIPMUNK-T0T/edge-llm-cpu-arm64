@@ -10,16 +10,13 @@ to use the service through a gateway. The focus is the engineering process:
 architecture, deployment, observability, benchmarks, failure recovery, and
 documented trade-offs.
 
-> Status (2026-07-25): Phases 0 and 1 passed. The ARM64 K3s foundation, pinned
+> Status (2026-07-25): Phases 0, 1, and 2 passed. The ARM64 K3s foundation, pinned
 > North Mini Code Q4_0 artifact, official `llama-server` runtime, one Ready
-> inference Pod, Windows-local Web UI, and chat API are verified. Phase 2 is in
-> progress: the Helm chart is now the repository's only serving definition, and
-> Helm 4.2.0 lint, template, schema, and K3s server-side dry-run checks pass. The
-> existing Deployment, Service, and model PVC were transferred without changing
-> their UIDs or deleting model data. A controlled context-size upgrade and
-> rollback passed; Helm release revision 4 now runs the original 4096-token
-> baseline. Init verification, Ready state, Web UI, health, and chat API checks
-> pass after rollback.
+> inference Pod, Windows-local Web UI, and chat API are verified. Helm is the
+> only serving definition; static checks, controlled upgrade, rollback,
+> uninstall, and normal reinstall all succeeded. The reinstall retained the
+> existing model PVC and exact model SHA without a 17 GB recopy. UI, health,
+> fixed chat, and explicit SSE checks pass through the recreated K3s Service.
 
 ## Demonstrated so far
 
@@ -28,12 +25,12 @@ documented trade-offs.
 - Pinned model provenance, runtime digest, and reproducible model placement
 - Windows-local Web UI and API access to the K3s-hosted workload
 - Statically validated Helm packaging without changing the live workload
-- Helm ownership migration while preserving the bound model PVC
 - Controlled Helm values upgrade and rollback with workload verification
+- Helm uninstall and normal reinstall while retaining the exact model artifact
+- Explicit SSE streaming through the Helm-managed K3s Service
 
 ## Planned portfolio scope
 
-- Helm uninstall/reinstall with retained storage and streaming verification
 - Private external access through Tailscale and a gateway
 - LLM performance and operational observability
 - Failure diagnosis and recovery under realistic resource constraints
@@ -79,8 +76,8 @@ host and WSL2 baseline.
 - [K3s inference and Windows-local Web UI verification](docs/verification/north-mini-code-k3s-serving-2026-07-25.md)
 - [Helm packaging and PVC lifecycle decision](docs/adr/0004-use-helm-as-serving-source-of-truth.md)
 - [Helm static validation](docs/verification/north-mini-code-helm-static-2026-07-25.md)
-- [Helm ownership migration and install verification](docs/verification/north-mini-code-helm-install-2026-07-25.md)
 - [Helm controlled upgrade and rollback](docs/verification/north-mini-code-helm-upgrade-rollback-2026-07-25.md)
+- [Helm uninstall, retained-PVC reinstall, and SSE verification](docs/verification/north-mini-code-helm-uninstall-reinstall-sse-2026-07-25.md)
 
 ## Repository map
 

@@ -5,11 +5,10 @@
 
 ## Context
 
-Phase 1 used separate raw manifests for model import and inference plus a local
-renderer for the machine-specific host path. Keeping those files after adding
-Helm would create two deployment definitions that could drift. The 17 GB model
-artifact in the local-path PVC must also survive lifecycle exercises, including
-release uninstall and reinstall.
+Keeping raw serving manifests beside a Helm chart would create two deployment
+definitions that could drift. The 17 GB model artifact in the local-path PVC
+must also survive lifecycle exercises, including release uninstall and
+reinstall.
 
 Packaging the import Job and Deployment unchanged would introduce a clean
 install race: the inference container can start before the model Job completes.
@@ -27,8 +26,7 @@ spec fields are immutable.
 ## Decision
 
 Use option 3. `charts/north-mini-code` is the repository's only serving
-definition. Delete the raw model/import and serving manifests plus their
-renderer after static equivalence and API validation.
+definition.
 
 The chart fixes the verified model identity, filename, size, SHA-256, runtime
 image digest, one replica, `Recreate` strategy, storage size/class, Service,
@@ -42,9 +40,7 @@ to a temporary path, verifies its size and SHA-256, and renames it atomically.
 The main container mounts the PVC read-only.
 
 Annotate the PVC with `helm.sh/resource-policy: keep`. Use the release namespace
-rather than templating a Namespace object. The controlled live migration will
-use Helm 4.2 ownership transfer for the existing same-named resources; it is a
-separate gate from static chart validation.
+rather than templating a Namespace object.
 
 ## Consequences
 
@@ -53,20 +49,15 @@ separate gate from static chart validation.
 - Every Pod start verifies the 17 GB artifact before inference, increasing
   startup time; this cost must be measured rather than hidden.
 - The host model directory remains a single-node, environment-specific input.
-- Release uninstall preserves model bytes but leaves a retained PVC. A
-  same-name, same-namespace reinstall may accept its existing Helm ownership
-  metadata; normal dry-run and install must be attempted before considering an
-  explicit ownership takeover.
+- Release uninstall preserves model bytes but leaves a retained PVC. The
+  verified same-name, same-namespace reinstall accepted its existing Helm
+  ownership metadata through a normal dry-run and install; no explicit
+  ownership takeover was needed.
 - Helm cannot provide availability during a `Recreate` rollout on this
   single-node, one-replica lab.
-- `--take-ownership` adopts Helm metadata but does not remove every legacy
-  Kubernetes managed-field owner. The first field-changing upgrade after the
-  Phase 1 migration required a reviewed, one-time `--force-conflicts` apply to
-  transfer the `args` field from `kubectl-client-side-apply` to Helm. This is
-  not a default flag for later upgrades.
 - Static validation alone does not prove lifecycle or serving behavior. Live
-  install, upgrade, rollback, Web UI, health, and chat checks have passed;
-  uninstall/reinstall and explicit SSE remain separate gates.
+  install, upgrade, rollback, uninstall/reinstall, Web UI, health, chat, and
+  explicit SSE checks have passed.
 
 ## Validation
 
@@ -74,10 +65,11 @@ separate gate from static chart validation.
 2. Run strict lint and reject invalid or unknown values through the schema.
 3. Render exactly one Deployment, one Service, and one PVC.
 4. Pass K3s server-side dry-run and review the live-object diff.
-5. Move the live objects under Helm ownership without deleting the bound PVC.
+5. Install the chart and preserve the bound PVC across uninstall and reinstall.
 6. Verify init completion, Ready state, Web UI, chat API, controlled upgrade,
    rollback, uninstall/reinstall behavior, and explicit SSE streaming.
 
-Steps 1 through 5 and the init, Ready, Web UI, health, non-streaming chat,
-controlled upgrade, and rollback parts of step 6 passed on 2026-07-25.
-Uninstall/reinstall and explicit SSE checks remain open.
+All validation steps passed on 2026-07-25. The uninstall/reinstall retained the
+same PVC UID, PV binding, model size, and model SHA through the normal install
+path. The recreated K3s Service passed UI, health, non-streaming chat, and
+explicit multi-frame SSE checks.

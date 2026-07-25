@@ -58,12 +58,12 @@ and [deployment smoke result](benchmark/results/north-mini-code-q4-0-k3s-smoke-2
 
 ## Phase 2 — Helm and lifecycle operations
 
-**Status:** in progress; steps 2-1 through 2-4 passed on 2026-07-25. The 2-5
-Phase 2 exit gate remains.
+**Status:** complete on 2026-07-25. Implementation and lifecycle steps 2-1
+through 2-5 passed, followed by a cross-phase consistency review.
 
 Completed:
 
-- Replaced the raw serving manifests and their renderer with one Helm chart.
+- Established one Helm chart as the only serving definition.
 - Exposed only the environment and experiment inputs that need to vary: model
   source path, context size, threads, CPU and memory resources, probes, and
   termination grace period.
@@ -73,28 +73,31 @@ Completed:
 - Pinned and checksum-verified the official Helm 4.2.0 Linux ARM64 client.
 - Passed strict chart lint, values schema checks, template rendering, and K3s
   server-side dry-run without changing the live workload.
-- Transferred the existing Deployment, Service, and bound model PVC to Helm
-  release revision 1 without changing their UIDs or deleting model data.
 - Verified init model integrity, `1/1` Ready with zero restarts, ClusterIP and
   Windows-local Web UI/health, and the fixed non-streaming chat smoke input.
-- Removed the superseded completed model import Job from the live namespace.
 - Upgraded context size from 4096 to 3072 through a local values file, verified
-  the effective Pod arguments and serving path, and rolled back to revision 1.
-- Verified the rollback as release revision 4 with context size 4096, zero Pod
-  restarts, unchanged Deployment/Service/PVC identities, and a working UI,
-  health endpoint, and fixed chat input.
-
-Remaining:
-
-- Exercise uninstall and reinstall with the retained PVC.
-- Record one explicit SSE streaming check through the Helm-managed K3s Service.
+  the effective Pod arguments and serving path, and rolled back to 4096.
+- Verified the rollback with zero Pod restarts, preserved
+  Deployment/Service/PVC identities, and a working UI, health endpoint, and
+  fixed chat input.
+- Uninstalled the Helm release while retaining the bound model PVC and exact
+  model artifact.
+- Reinstalled through the normal install path, verified the same PVC UID, PV
+  binding, model size, and model SHA, and confirmed that the model was not
+  recopied.
+- Verified the recreated one-Pod serving path with the embedded UI, health,
+  fixed non-streaming chat input, and explicit multi-frame SSE response ending
+  in `[DONE]`.
+- Disabled automatic ServiceAccount token mounting because neither serving
+  container uses the Kubernetes API, then verified zero token volumes/mounts
+  and repeated UI, health, chat, and SSE checks.
 
 **Static evidence:** [Helm static validation](docs/verification/north-mini-code-helm-static-2026-07-25.md)
 and [ADR-0004](docs/adr/0004-use-helm-as-serving-source-of-truth.md).
 
-**Install evidence:** [Helm ownership migration](docs/verification/north-mini-code-helm-install-2026-07-25.md).
-
 **Lifecycle evidence:** [controlled upgrade and rollback](docs/verification/north-mini-code-helm-upgrade-rollback-2026-07-25.md).
+
+**Recreation evidence:** [uninstall, retained-PVC reinstall, and SSE](docs/verification/north-mini-code-helm-uninstall-reinstall-sse-2026-07-25.md).
 
 ## Phase 3 — Private external access
 

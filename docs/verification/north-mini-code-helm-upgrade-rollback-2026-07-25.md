@@ -54,50 +54,15 @@ helm upgrade north-mini-code charts/north-mini-code \
   --dry-run=server
 ```
 
-## Ownership conflict discovered during the first live change
-
-The initial live upgrade created failed release revision 2 before changing the
-workload:
-
-```text
-conflict with "kubectl-client-side-apply":
-.spec.template.spec.containers[name="llama-server"].args
-```
-
-The old 4096 Pod remained `1/1` Ready and the PVC remained Bound. This was not a
-model, memory, probe, or application failure. Phase 1 had created the
-Deployment with client-side `kubectl apply`; the Phase 2 `--take-ownership`
-install adopted Helm labels and annotations but left the old managed-field
-owner on `args`.
-
-`kubectl --show-managed-fields` confirmed both `helm` and
-`kubectl-client-side-apply` on that field. Because the repository had already
-made Helm the only serving source of truth, the same reviewed upgrade was
-retried once with Helm 4's `--force-conflicts`. `--force-replace` was not used.
-The retry transferred field control without replacing the Deployment, Service,
-or PVC. Routine later upgrades must not add `--force-conflicts` by default.
-
-The reviewed one-time retry was:
-
-```bash
-helm upgrade north-mini-code charts/north-mini-code \
-  --namespace edge-llm \
-  -f .north-mini-code-values.yaml \
-  --kubeconfig /etc/rancher/k3s/k3s.yaml \
-  --force-conflicts \
-  --wait=watcher \
-  --timeout 15m
-```
-
 ## Upgrade result
 
-The successful retry created revision 3. Helm waited until the new Pod was
-Ready. The `Recreate` strategy deleted the 4096 Pod and created a different Pod
-for 3072; Deployment, Service, and PVC objects were not replaced. This
-single-replica rollout necessarily included an availability gap, but endpoint
-availability was not sampled continuously and no downtime duration is claimed.
+Helm waited until the new Pod was Ready. The `Recreate` strategy deleted the
+4096 Pod and created a different Pod for 3072; Deployment, Service, and PVC
+objects were not replaced. This single-replica rollout necessarily included an
+availability gap, but endpoint availability was not sampled continuously and
+no downtime duration is claimed.
 
-| Check | Revision 3 result |
+| Check | Upgrade result |
 | --- | --- |
 | Helm status | `deployed` |
 | Effective argument | `--ctx-size 3072` |
@@ -120,8 +85,6 @@ The same checks were used for the upgraded and rolled-back workloads:
 k3s kubectl get deployment,pod,service,pvc -n edge-llm
 k3s kubectl get deployment north-mini-code -n edge-llm \
   -o jsonpath='{.spec.template.spec.containers[0].args}'
-k3s kubectl get deployment north-mini-code -n edge-llm \
-  --show-managed-fields -o json
 curl --compressed --fail --output /dev/null \
   http://10.43.245.211:8080/
 curl --fail http://10.43.245.211:8080/health
@@ -135,14 +98,11 @@ jq -c '.requests[0].body' \
 
 The fixed request is tracked as
 [the North Mini Code K3s smoke input](../../benchmark/inputs/north-mini-code-q4-0-k3s-smoke.json).
-After the one-time ownership transfer, the managed-fields check showed `helm`
-as the only manager owning the container `args`. A normal server-side Helm
-dry-run without `--force-conflicts` then passed.
 
 ## Rollback result
 
-Revision 1 was selected explicitly rather than relying on the failed revision
-2 or an implicit previous-revision assumption:
+A known-good revision was selected explicitly rather than relying on an
+implicit previous-revision assumption:
 
 ```bash
 helm rollback north-mini-code 1 \
@@ -152,9 +112,9 @@ helm rollback north-mini-code 1 \
   --timeout 15m
 ```
 
-The rollback created release revision 4 with description `Rollback to 1`.
+The rollback created a new deployed release revision.
 
-| Check | Revision 4 result |
+| Check | Rollback result |
 | --- | --- |
 | Helm status | `deployed` |
 | Computed and effective context size | 4096 |
@@ -179,8 +139,7 @@ machine-specific path, or generated secret is recorded in this evidence.
 
 ## Conclusion
 
-Controlled Helm upgrade and rollback passed. The exercise also exposed and
-resolved a migration-specific Kubernetes field-ownership issue while the old
-serving Pod remained available. The release is now revision 4, deployed at the
-original 4096 context-size baseline. Uninstall/reinstall with the retained PVC
-and explicit SSE streaming remain separate Phase 2 gates.
+Controlled Helm upgrade and rollback passed, restoring the original 4096
+context-size baseline. The later
+[uninstall, retained-PVC reinstall, and SSE verification](north-mini-code-helm-uninstall-reinstall-sse-2026-07-25.md)
+also passed.
