@@ -1,3 +1,5 @@
+# Canonical model and artifact provenance. Deployment values, download
+# constants, and benchmark model IDs are checked against this file.
 model:
   name: North-Mini-Code-1.0
   source:

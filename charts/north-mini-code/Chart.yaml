@@ -2,5 +2,5 @@ apiVersion: v2
 name: north-mini-code
 description: North Mini Code Q4_0 serving baseline for the single-node ARM64 K3s lab
 type: application
-version: 0.1.1
+version: 0.2.0
 appVersion: "North-Mini-Code-1.0-Q4_0"

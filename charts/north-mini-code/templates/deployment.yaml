@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: north-mini-code
+  name: {{ include "north-mini-code.fullname" . }}
   labels:
     {{- include "north-mini-code.commonLabels" . | nindent 4 }}
     app.kubernetes.io/component: inference
@@ -14,6 +14,8 @@ spec:
       {{- include "north-mini-code.selectorLabels" . | nindent 6 }}
   template:
     metadata:
+      annotations:
+        edge-llm/profile-name: {{ .Values.profile.name | quote }}
       labels:
         {{- include "north-mini-code.commonLabels" . | nindent 8 }}
         app.kubernetes.io/component: inference
@@ -29,39 +31,23 @@ spec:
           type: RuntimeDefault
       initContainers:
         - name: prepare-model
-          image: ghcr.io/ggml-org/llama.cpp:server-b10108@sha256:06ac0adfef3ce89ce7f080fbe129b4725362a6281ad110c8493fffd6393841c1
+          image: {{ .Values.profile.runtime.image | quote }}
           imagePullPolicy: IfNotPresent
           command:
             - /bin/sh
             - -ec
           args:
             - |
-              source_file="/source/North-Mini-Code-1.0-Q4_0.gguf"
-              target_file="/models/North-Mini-Code-1.0-Q4_0.gguf"
-              temporary_file="${target_file}.part"
-              expected_size="17521204800"
-              expected_sha256="e4803e44e2b97269deb3b33b1ea8d4309d06773ca5f07684f876bd8f751f4f86"
-
-              verify_file() {
-                candidate="$1"
-                test -f "$candidate"
-                actual_size="$(stat -c '%s' "$candidate")"
-                actual_sha256_line="$(sha256sum "$candidate")"
-                actual_sha256="${actual_sha256_line%% *}"
-                test "$actual_size" = "$expected_size"
-                test "$actual_sha256" = "$expected_sha256"
-              }
-
-              if verify_file "$target_file"; then
-                echo "Model already present and verified."
-                exit 0
-              fi
-
-              echo "Copying the pinned model into the PVC."
-              cp "$source_file" "$temporary_file"
-              verify_file "$temporary_file"
-              mv "$temporary_file" "$target_file"
-              echo "Model import and verification: PASS"
+{{ .Files.Get "files/prepare-model.sh" | nindent 14 }}
+          env:
+            - name: SOURCE_FILE
+              value: {{ printf "/source/%s" .Values.profile.model.fileName | quote }}
+            - name: TARGET_FILE
+              value: {{ printf "/models/%s" .Values.profile.model.fileName | quote }}
+            - name: EXPECTED_SIZE
+              value: {{ .Values.profile.model.sizeBytes | quote }}
+            - name: EXPECTED_SHA256
+              value: {{ .Values.profile.model.sha256 | quote }}
           resources:
             requests:
               cpu: "1"
@@ -83,11 +69,11 @@ spec:
               mountPath: /models
       containers:
         - name: llama-server
-          image: ghcr.io/ggml-org/llama.cpp:server-b10108@sha256:06ac0adfef3ce89ce7f080fbe129b4725362a6281ad110c8493fffd6393841c1
+          image: {{ .Values.profile.runtime.image | quote }}
           imagePullPolicy: IfNotPresent
           args:
             - --model
-            - /models/North-Mini-Code-1.0-Q4_0.gguf
+            - {{ printf "/models/%s" .Values.profile.model.fileName | quote }}
             - --host
             - 0.0.0.0
             - --port
@@ -154,7 +140,7 @@ spec:
             type: Directory
         - name: model
           persistentVolumeClaim:
-            claimName: north-mini-code-model
+            claimName: {{ include "north-mini-code.modelPvcName" . }}
         - name: temporary
           emptyDir:
             medium: Memory

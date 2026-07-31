@@ -20,30 +20,42 @@ clients, observe it, measure it, and recover it when it fails.
 | Remote network | private Tailscale tailnet |
 | Client | embedded Web UI; minimal Android streaming client; PC command-line client |
 
-The model identity, quantization, artifact hash, and runtime image digest form
-the fixed Phase 1 baseline. Context size, threads, resource settings, and other
-explicitly varied inference controls are experiment parameters. Record their
-values with results.
+The tracked default profile binds the verified model identity, quantization,
+artifact hash, official runtime image digest, and serving controls. The profile
+is reproducible, but it is not a universal default: another
+llama.cpp-compatible profile is accepted only after it passes the same chart,
+artifact, and inference API contracts. Machine placement, such as the absolute
+host model path, remains site configuration.
+
+`config/models/north-mini-code-q4-0.yaml` is the canonical artifact provenance
+record. A static contract checks its filename, quantization, size, hash,
+repository revision, and benchmark model ID against their deployment and
+download consumers.
 
 The `charts/north-mini-code` chart is the only serving definition in the
 current repository. It manages one Deployment, one ClusterIP Service, and one
-retained model PVC through Helm release `north-mini-code`.
+retained model PVC through Helm release `north-mini-code`. Helm values are the
+composition root, the PVC mount is the model-artifact interface, and the
+ClusterIP Service is the inference network interface.
 
 ## Logical architecture
 
 ```text
-[Android client] ----\
-                    +-- Tailscale --> [Gateway / ingress] --> [K3s Service]
-[External PC] ------/                                      |
-                                                     [Helm-managed Pod]
-                                                        /          \
-                                             [model init]      [llama-server]
-                                                   |                 |
-                                           [host GGUF] ---------> [PVC]
+[Android client (planned)] ----\
+                                +-- [Tailscale (planned)] --> [Gateway Deployment (planned)]
+[External PC (planned)] --------/                                  separate release
+                                                                          |
+                                                               [Inference Service]
+                                                                          |
+                                                                  [Inference Pod]
+                                                                     /        \
+                                                           [model init]  [llama-server]
+                                                                |             |
+                                                        [host GGUF] -------> [PVC]
 
-[Prometheus] <--- metrics / exporter --- gateway and workload
-      |
-[Grafana]
+[Prometheus (planned)] <--- metrics / exporter --- gateway and workload
+          |
+[Grafana (planned)]
 
 [Windows browser] -- localhost-only port-forward --> [K3s Service]
 ```
@@ -54,8 +66,10 @@ retained model PVC through Helm release `north-mini-code`.
 | --- | --- | --- |
 | Tailscale | Private, encrypted connectivity between enrolled devices | Application authentication or request policy |
 | Gateway / ingress | Only supported entry point; reverse proxy, request policy, and telemetry | Direct model inference |
+| Inference Service | Stable in-cluster DNS/port contract and routing to Ready inference Pods | Model loading or external exposure |
 | K3s | Scheduling and lifecycle of in-cluster workloads | Multi-node availability |
 | Helm chart | Declarative serving configuration, release history, upgrade, and rollback | Preserving availability on this single node |
+| Model init | Place an exact size/SHA-verified GGUF at the PVC contract path before inference starts | Serving HTTP requests |
 | `llama-server` | OpenAI-compatible inference and streaming | Public exposure or durable authorization |
 | PVC | Model storage persistence within the lab | Distributed storage durability |
 | Android client | End-to-end streaming and client-side experience measurements | Product-grade UX or distribution |
@@ -73,6 +87,14 @@ retained model PVC through Helm release `north-mini-code`.
   and filesystem behavior must be verified rather than assumed.
 - **Gateway before inference:** prevents the inference endpoint from becoming
   the network boundary, and creates one place for request controls and metrics.
+- **Two long-running workload boundaries:** inference and gateway have
+  different privileges, update cadence, and failure domains, so they are
+  separate Deployments and Helm releases. Model preparation remains an init
+  container because it is an ordered prerequisite of inference, not an
+  independently available service.
+- **Kubernetes-native injection:** use schema-constrained Helm values, PVC
+  mounts, Service DNS, and an explicitly tested HTTP/SSE subset instead of an
+  application DI framework, CRD, Operator, or unrestricted plugin values.
 - **Tailscale rather than public ingress:** suitable for private lab access and
   remote-client verification. It does not remove the need for gateway policy.
 - **GGUF quantization:** reduces RAM requirements at a quality/performance
@@ -90,11 +112,21 @@ retained model PVC through Helm release `north-mini-code`.
 - **One Helm source:** do not retain raw serving manifests beside the chart.
   The Helm chart is the only serving definition, avoiding configuration drift
   from parallel deployment paths.
-- **Model preparation in the Pod lifecycle:** an init container copies the
-  pinned host GGUF only when the PVC does not contain the verified artifact and
-  checks its exact size and SHA-256 before inference starts. This avoids a race
-  between an import Job and the Deployment, at the cost of verifying the 17 GB
-  file on each Pod start.
+- **Model preparation in the Pod lifecycle:** an init container executes a
+  separately testable script that copies the profile-selected host GGUF only
+  when the PVC does not contain the verified artifact and checks its exact size
+  and SHA-256 before inference starts. Its contract is four inputs
+  (`SOURCE_FILE`, `TARGET_FILE`, `EXPECTED_SIZE`, and
+  `EXPECTED_SHA256`) and one verified file at the PVC path. This avoids an
+  import Job/Deployment race at the cost of verifying the file on each start.
+- **Contract scope:** the serving adapter guarantees only the verified subset:
+  health, Prometheus metrics, 4xx invalid-request handling, non-streaming
+  `/v1/chat/completions`, and multi-frame SSE ending once in `[DONE]`.
+  It does not claim the full OpenAI API surface.
+- **Artifact identity per release:** a release and its retained PVC bind one
+  model filename, size, and SHA-256. A different artifact uses a different
+  release/PVC rather than an in-place profile mutation that could retain two
+  large files or exhaust the 24 GiB claim.
 - **Retained model PVC:** Helm owns the PVC but marks it with
   `helm.sh/resource-policy: keep`. Uninstalling the release must not discard the
   costly verified artifact. A verified same-name, same-namespace reinstall

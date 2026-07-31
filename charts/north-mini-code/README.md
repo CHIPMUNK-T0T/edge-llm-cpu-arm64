@@ -18,8 +18,50 @@ cp .north-mini-code-values.example.yaml .north-mini-code-values.yaml
 ```
 
 The ignored `.north-mini-code-values.yaml` contains only local overrides. The
-tracked `values.yaml` remains the complete, reviewed serving baseline. The
-separate `.lab-config.yaml` remains responsible only for K3s operator access.
+tracked `values.yaml` contains the reviewed default profile and serving
+baseline. The `profile` block is the model/runtime injection boundary: a
+different llama.cpp-compatible profile must provide a digest-pinned official
+runtime image and pass the same chart, artifact, and API contracts before it is
+described as verified. Arbitrary commands, arguments, or container images are
+not accepted. The separate `.lab-config.yaml` remains responsible only for
+K3s operator access.
+
+## Contract validation
+
+Run the static chart contract and the model-artifact fixture from the
+repository root. These tests require Helm, kubectl, curl, and Python 3:
+
+```bash
+tests/chart-contract.sh .north-mini-code-values.yaml
+tests/model-artifact-contract.sh
+tests/profile-consistency.sh
+```
+
+With the localhost-only port-forward running, verify the same API contract
+that a future gateway must preserve:
+
+```bash
+tests/api-contract.sh http://localhost:18080
+```
+
+The API contract covers health, Prometheus metrics, invalid-request handling,
+non-streaming chat, and multi-frame SSE with one terminal `[DONE]` event.
+
+A valid existing target is reused without reading the host source. If the
+expected target exists but fails its size or SHA-256 check, model init first
+verifies the host source, removes the invalid target only after that succeeds,
+then copies through the verified `.part` path. This avoids requiring two full
+model copies on the 24 GiB PVC. If the source is missing or invalid, the
+existing target is left unchanged and startup fails safely.
+
+A profile's model filename, size, and SHA-256 are immutable within one Helm
+release. Use a different release name and therefore a different retained PVC
+for a different artifact. Changing the artifact identity in place is not a
+supported upgrade: the old and partial files can coexist and exceed the 24 GiB
+claim. Removing an old retained PVC is a separate, destructive operator action.
+Resource names and selectors derive from the Helm release name; the verified
+`north-mini-code` release therefore keeps its existing Deployment, Service,
+and `north-mini-code-model` PVC names.
 
 ## Static validation
 

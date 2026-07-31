@@ -67,9 +67,10 @@ Completed:
 - Exposed only the environment and experiment inputs that need to vary: model
   source path, context size, threads, CPU and memory resources, probes, and
   termination grace period.
-- Kept the verified model identity, quantization, artifact hash, runtime image
-  digest, one-replica `Recreate` strategy, ClusterIP Service, security controls,
-  Jinja support, metrics, and embedded Web UI fixed in this baseline.
+- Defined the verified model/runtime combination as the reviewed default while
+  allowing only schema-constrained, contract-tested llama.cpp-compatible
+  profiles. Kept the one-replica `Recreate` strategy, ClusterIP Service,
+  security controls, Jinja support, metrics, and embedded Web UI fixed.
 - Pinned and checksum-verified the official Helm 4.2.0 Linux ARM64 client.
 - Passed strict chart lint, values schema checks, template rendering, and K3s
   server-side dry-run without changing the live workload.
@@ -91,6 +92,18 @@ Completed:
 - Disabled automatic ServiceAccount token mounting because neither serving
   container uses the Kubernetes API, then verified zero token volumes/mounts
   and repeated UI, health, chat, and SSE checks.
+- Refactored the same three-resource serving unit into explicit injection and
+  contract boundaries without adding a long-running Pod: a reviewed
+  model/runtime profile, site-specific source path, tested PVC artifact
+  preparation, release-specific selectors, and a reusable API contract.
+- Recreated only the immutable-selector Deployment through Helm revision 3;
+  preserved the Service UID/ClusterIP and PVC UID/PV, reused the verified model
+  without copying it, and passed UI, health, metrics, 4xx, chat, and SSE checks.
+- Stored the final chart package as Helm revision 4 through a no-op upgrade;
+  the Ready Pod UID and zero-restart count were unchanged.
+- Applied the reviewed invalid-artifact repair and observable profile contract
+  as Helm revision 5. The healthy retained target was verified and reused
+  without recopying, and the replacement Pod reached Ready.
 
 **Static evidence:** [Helm static validation](docs/verification/north-mini-code-helm-static-2026-07-25.md)
 and [ADR-0004](docs/adr/0004-use-helm-as-serving-source-of-truth.md).
@@ -98,6 +111,9 @@ and [ADR-0004](docs/adr/0004-use-helm-as-serving-source-of-truth.md).
 **Lifecycle evidence:** [controlled upgrade and rollback](docs/verification/north-mini-code-helm-upgrade-rollback-2026-07-25.md).
 
 **Recreation evidence:** [uninstall, retained-PVC reinstall, and SSE](docs/verification/north-mini-code-helm-uninstall-reinstall-sse-2026-07-25.md).
+
+**Contract refactor evidence:** [profile, artifact, selector, and API contracts](docs/verification/north-mini-code-contract-refactor-2026-07-31.md)
+and [ADR-0005](docs/adr/0005-use-kubernetes-native-contract-boundaries.md).
 
 ## Phase 3 — Private external access
 

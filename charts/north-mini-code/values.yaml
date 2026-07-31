@@ -1,6 +1,20 @@
 model:
   sourcePath: /home/your-user/work/edge-llm-cpu-arm64/models/north-mini-code
 
+# Verified model and runtime combination. These values describe the reviewed
+# serving artifact; machine-specific placement remains under model.sourcePath.
+profile:
+  name: north-mini-code-1.0-q4-0-llama-cpp-b10108
+  model:
+    fileName: North-Mini-Code-1.0-Q4_0.gguf
+    format: GGUF
+    quantization: Q4_0
+    sizeBytes: "17521204800"
+    sha256: e4803e44e2b97269deb3b33b1ea8d4309d06773ca5f07684f876bd8f751f4f86
+  runtime:
+    engine: llama.cpp
+    image: ghcr.io/ggml-org/llama.cpp:server-b10108@sha256:06ac0adfef3ce89ce7f080fbe129b4725362a6281ad110c8493fffd6393841c1
+
 serving:
   contextSize: 4096
   threads: 12
