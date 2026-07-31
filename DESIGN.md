@@ -65,8 +65,8 @@ ClusterIP Service is the inference network interface.
 | Boundary | Responsibility | Not responsible for |
 | --- | --- | --- |
 | Tailscale | Private, encrypted connectivity between enrolled devices | Application authentication or request policy |
-| Gateway / ingress | Only supported entry point; reverse proxy, request policy, and telemetry | Direct model inference |
-| Inference Service | Stable in-cluster DNS/port contract and routing to Ready inference Pods | Model loading or external exposure |
+| Gateway / ingress | Only supported external entry point; client contract, request policy, and telemetry | Direct model inference or exposing operational metrics |
+| Inference Service | Stable in-cluster DNS/port contract and routing to Ready inference Pods | Model loading, client access policy, or external exposure |
 | K3s | Scheduling and lifecycle of in-cluster workloads | Multi-node availability |
 | Helm chart | Declarative serving configuration, release history, upgrade, and rollback | Preserving availability on this single node |
 | Model init | Place an exact size/SHA-verified GGUF at the PVC contract path before inference starts | Serving HTTP requests |
@@ -86,7 +86,8 @@ ClusterIP Service is the inference network interface.
   while retaining Windows on ARM as the host constraint. Startup, networking,
   and filesystem behavior must be verified rather than assumed.
 - **Gateway before inference:** prevents the inference endpoint from becoming
-  the network boundary, and creates one place for request controls and metrics.
+  the external network boundary, and creates one place for client request
+  controls. Inference metrics remain on the internal operational contract.
 - **Two long-running workload boundaries:** inference and gateway have
   different privileges, update cadence, and failure domains, so they are
   separate Deployments and Helm releases. Model preparation remains an init
@@ -119,10 +120,17 @@ ClusterIP Service is the inference network interface.
   (`SOURCE_FILE`, `TARGET_FILE`, `EXPECTED_SIZE`, and
   `EXPECTED_SHA256`) and one verified file at the PVC path. This avoids an
   import Job/Deployment race at the cost of verifying the file on each start.
-- **Contract scope:** the serving adapter guarantees only the verified subset:
-  health, Prometheus metrics, 4xx invalid-request handling, non-streaming
-  `/v1/chat/completions`, and multi-frame SSE ending once in `[DONE]`.
-  It does not claim the full OpenAI API surface.
+- **Contract scope:** the internal inference adapter guarantees health,
+  localhost-only browser origins, Prometheus metrics, 4xx invalid-request
+  handling, non-streaming
+  `/v1/chat/completions`, and multi-frame SSE ending once in `[DONE]`. The
+  future external gateway has a separate client contract for access policy,
+  chat, SSE, and backend failures; it does not expose inference metrics as a
+  client endpoint. Neither contract claims the full OpenAI API surface.
+- **Browser-origin boundary:** the ClusterIP-only inference server restricts
+  CORS to localhost and disables CORS credentials for the temporary operator
+  UI path. It has no application API key. Tailscale clients must terminate at
+  the future gateway, which owns external access policy.
 - **Artifact identity per release:** a release and its retained PVC bind one
   model filename, size, and SHA-256. A different artifact uses a different
   release/PVC rather than an in-place profile mutation that could retain two

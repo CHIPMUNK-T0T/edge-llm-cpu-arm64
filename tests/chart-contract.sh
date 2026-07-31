@@ -45,6 +45,11 @@ grep -q 'helm.sh/resource-policy: keep' "$work_dir/baseline.yaml" || \
   fail 'PVC keep policy is missing'
 grep -q 'type: ClusterIP' "$work_dir/baseline.yaml" || \
   fail 'Service is not ClusterIP'
+grep -A1 -- '- --cors-origins' "$work_dir/baseline-deployment.yaml" | \
+  grep -q -- '- localhost' || \
+  fail 'llama-server CORS is not restricted to localhost'
+grep -q -- '- --no-cors-credentials' "$work_dir/baseline-deployment.yaml" || \
+  fail 'llama-server CORS credentials are not disabled'
 grep -q 'edge-llm/profile-name: "north-mini-code-1.0-q4-0-llama-cpp-b10108"' \
   "$work_dir/baseline-deployment.yaml" || \
   fail 'reviewed profile name is not observable on the Pod template'

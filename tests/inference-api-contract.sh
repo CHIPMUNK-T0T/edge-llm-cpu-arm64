@@ -6,6 +6,7 @@ base_url="${1:-${API_BASE_URL:-}}"
 model_id="${API_MODEL_ID:-North-Mini-Code-1.0-Q4_0.gguf}"
 connect_timeout="${API_CONNECT_TIMEOUT_SECONDS:-5}"
 request_timeout="${API_REQUEST_TIMEOUT_SECONDS:-180}"
+local_origin="${INFERENCE_LOCAL_ORIGIN:-http://localhost}"
 
 if [ -z "$base_url" ]; then
   printf 'usage: %s BASE_URL\n' "$0" >&2
@@ -37,7 +38,7 @@ curl_request() {
     "$@"
 }
 
-printf '1/5 health contract\n'
+printf '1/6 health contract\n'
 curl_request --output "$work_dir/health.json" "$base_url/health"
 [ -s "$work_dir/health.json" ] || fail 'health response is empty'
 python3 - "$work_dir/health.json" <<'PY'
@@ -50,17 +51,43 @@ if payload.get("status") != "ok":
     raise SystemExit("health response does not report status ok")
 PY
 
+printf '2/6 browser-origin contract\n'
+curl_request \
+  --header 'Origin: https://untrusted.example' \
+  --dump-header "$work_dir/untrusted-origin-headers.txt" \
+  --output /dev/null \
+  "$base_url/health"
+if grep -Eiq '^access-control-allow-origin:' \
+  "$work_dir/untrusted-origin-headers.txt"; then
+  fail 'untrusted browser origin received an allow-origin header'
+fi
+
+curl_request \
+  --header "Origin: $local_origin" \
+  --dump-header "$work_dir/localhost-origin-headers.txt" \
+  --output /dev/null \
+  "$base_url/health"
+tr -d '\r' <"$work_dir/localhost-origin-headers.txt" \
+  >"$work_dir/localhost-origin-headers-normalized.txt"
+grep -Fqi "Access-Control-Allow-Origin: $local_origin" \
+  "$work_dir/localhost-origin-headers-normalized.txt" || \
+  fail 'localhost browser origin was not reflected'
+if grep -Eiq '^access-control-allow-credentials:' \
+  "$work_dir/localhost-origin-headers-normalized.txt"; then
+  fail 'CORS credentials are enabled'
+fi
+
 cat >"$work_dir/non-stream-request.json" <<EOF
 {"model":"$model_id","messages":[{"role":"user","content":"Reply with exactly: hello"}],"max_tokens":256,"temperature":0,"stream":false}
 EOF
 
-printf '2/5 metrics contract\n'
+printf '3/6 metrics contract\n'
 curl_request --output "$work_dir/metrics.txt" "$base_url/metrics"
 [ -s "$work_dir/metrics.txt" ] || fail 'metrics response is empty'
 grep -Eq '^# (HELP|TYPE) llamacpp:' "$work_dir/metrics.txt" || \
   fail 'metrics response has no llama.cpp Prometheus metadata'
 
-printf '3/5 invalid request contract\n'
+printf '4/6 invalid request contract\n'
 invalid_status="$(curl --silent --show-error \
   --connect-timeout "$connect_timeout" \
   --max-time "$request_timeout" \
@@ -83,7 +110,7 @@ if not isinstance(payload.get("error"), dict):
     raise SystemExit("invalid request response has no error object")
 PY
 
-printf '4/5 non-streaming chat contract\n'
+printf '5/6 non-streaming chat contract\n'
 curl_request \
   --header 'Content-Type: application/json' \
   --data-binary "@$work_dir/non-stream-request.json" \
@@ -113,7 +140,7 @@ cat >"$work_dir/stream-request.json" <<EOF
 {"model":"$model_id","messages":[{"role":"user","content":"Reply with exactly: one two three four five"}],"max_tokens":256,"temperature":0,"stream":true}
 EOF
 
-printf '5/5 SSE chat contract\n'
+printf '6/6 SSE chat contract\n'
 curl_request --no-buffer \
   --dump-header "$work_dir/stream-headers.txt" \
   --header 'Accept: text/event-stream' \
@@ -169,5 +196,5 @@ PY
 json_frames="${frame_counts%% *}"
 done_frames="${frame_counts##* }"
 
-printf 'API contract: PASS (SSE JSON frames=%s, terminal frames=%s)\n' \
+printf 'Inference API contract: PASS (SSE JSON frames=%s, terminal frames=%s)\n' \
   "$json_frames" "$done_frames"

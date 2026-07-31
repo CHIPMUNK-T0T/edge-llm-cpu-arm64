@@ -89,6 +89,9 @@ spec:
             - --jinja
             - --metrics
             - --ui
+            - --cors-origins
+            - localhost
+            - --no-cors-credentials
           ports:
             - name: http
               containerPort: 8080

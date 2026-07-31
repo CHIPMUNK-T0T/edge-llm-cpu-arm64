@@ -37,15 +37,23 @@ tests/model-artifact-contract.sh
 tests/profile-consistency.sh
 ```
 
-With the localhost-only port-forward running, verify the same API contract
-that a future gateway must preserve:
+With the localhost-only port-forward running, verify the internal inference
+contract:
 
 ```bash
-tests/api-contract.sh http://localhost:18080
+tests/inference-api-contract.sh http://localhost:18080
 ```
 
-The API contract covers health, Prometheus metrics, invalid-request handling,
-non-streaming chat, and multi-frame SSE with one terminal `[DONE]` event.
+The inference contract covers health, localhost-only browser origins,
+Prometheus metrics, invalid-request handling, non-streaming chat, and
+multi-frame SSE with one terminal `[DONE]` event. Metrics are an internal
+operational endpoint. The future gateway gets a separate external-client
+contract and must not expose `/metrics` merely to reuse this test.
+
+`llama-server` accepts browser origins only from localhost and disables CORS
+credentials. It has no application API key because it remains a ClusterIP-only
+backend. External access must terminate at the future gateway, which owns
+client access policy and must not expose the inference Service directly.
 
 A valid existing target is reused without reading the host source. If the
 expected target exists but fails its size or SHA-256 check, model init first

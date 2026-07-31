@@ -104,6 +104,11 @@ Completed:
 - Applied the reviewed invalid-artifact repair and observable profile contract
   as Helm revision 5. The healthy retained target was verified and reused
   without recopying, and the replacement Pod reached Ready.
+- Restricted inference CORS to localhost, disabled CORS credentials, and kept
+  operational metrics in an internal inference contract rather than requiring
+  the future external gateway to expose them.
+- Pinned the Phase 0 nginx and BusyBox validation images by digest and repeated
+  their server-side validation on the ARM64 K3s node.
 
 **Static evidence:** [Helm static validation](docs/verification/north-mini-code-helm-static-2026-07-25.md)
 and [ADR-0004](docs/adr/0004-use-helm-as-serving-source-of-truth.md).
@@ -115,13 +120,18 @@ and [ADR-0004](docs/adr/0004-use-helm-as-serving-source-of-truth.md).
 **Contract refactor evidence:** [profile, artifact, selector, and API contracts](docs/verification/north-mini-code-contract-refactor-2026-07-31.md)
 and [ADR-0005](docs/adr/0005-use-kubernetes-native-contract-boundaries.md).
 
+**Boundary hardening evidence:** [inference CORS, contract separation, and
+foundation image digests](docs/verification/inference-boundary-hardening-2026-07-31.md).
+
 ## Phase 3 — Private external access
 
 **Status:** pending.
 
 - Route enrolled external PC and Android devices through Tailscale and a
   gateway; never expose `llama-server` directly.
-- Verify streaming, request policy, unavailable backend, and network-loss cases.
+- Define and verify a dedicated external-client contract for streaming,
+  request policy, unavailable backend, and network-loss cases. Do not expose
+  inference `/metrics` as part of that contract.
 - Keep the Android app to a minimal validation client.
 
 ## Phase 4 — Observability and benchmarks

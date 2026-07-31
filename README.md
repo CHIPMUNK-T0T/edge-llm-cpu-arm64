@@ -17,7 +17,7 @@ documented trade-offs.
 > uninstall, and normal reinstall all succeeded. The reinstall retained the
 > existing model PVC and exact model SHA without a 17 GB recopy. UI, health,
 > metrics, error handling, chat, and explicit SSE checks pass through the K3s
-> Service. Chart `0.2.0` now separates the reviewed model/runtime profile,
+> Service. Chart `0.2.1` now separates the reviewed model/runtime profile,
 > site-specific placement, PVC artifact contract, and Service/API contract.
 
 ## Demonstrated so far
@@ -32,8 +32,10 @@ documented trade-offs.
 - Explicit SSE streaming through the Helm-managed K3s Service
 - Schema-constrained model/runtime profile injection without arbitrary
   container or command overrides
-- Reusable chart, model-artifact, health, metrics, error, chat, and SSE contract
-  tests
+- Reusable chart, model-artifact, and internal inference contract tests covering
+  health, browser origins, metrics, error handling, chat, and SSE
+- Localhost-restricted CORS at the ClusterIP inference backend; external-client
+  policy remains a gateway responsibility
 
 ## Planned portfolio scope
 
@@ -85,6 +87,7 @@ host and WSL2 baseline.
 - [Helm controlled upgrade and rollback](docs/verification/north-mini-code-helm-upgrade-rollback-2026-07-25.md)
 - [Helm uninstall, retained-PVC reinstall, and SSE verification](docs/verification/north-mini-code-helm-uninstall-reinstall-sse-2026-07-25.md)
 - [Kubernetes-native contract refactor verification](docs/verification/north-mini-code-contract-refactor-2026-07-31.md)
+- [Inference boundary and foundation image verification](docs/verification/inference-boundary-hardening-2026-07-31.md)
 - [Kubernetes-native contract boundary decision](docs/adr/0005-use-kubernetes-native-contract-boundaries.md)
 
 ## Repository map

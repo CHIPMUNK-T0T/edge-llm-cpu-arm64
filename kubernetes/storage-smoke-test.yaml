@@ -39,7 +39,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: verify
-          image: busybox:1.37.0
+          image: busybox:1.37.0@sha256:9532d8c39891ca2ecde4d30d7710e01fb739c87a8b9299685c63704296b16028
           imagePullPolicy: IfNotPresent
           command:
             - /bin/sh

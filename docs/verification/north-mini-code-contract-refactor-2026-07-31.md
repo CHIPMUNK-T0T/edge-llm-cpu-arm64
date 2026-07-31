@@ -121,7 +121,7 @@ No 17 GB copy was performed. The Pod had
 After restarting the localhost-only port-forward:
 
 ```bash
-tests/api-contract.sh http://localhost:18080
+tests/inference-api-contract.sh http://localhost:18080
 ```
 
 passed all contract checks:

@@ -44,11 +44,15 @@ Use option 3, a small ports-and-adapters design expressed through Kubernetes:
   release in the same namespace.
 - The ClusterIP Service is the stable inference interface. Consumers know its
   DNS name and named HTTP port, not a Pod name or IP.
-- The guaranteed API surface is limited to health, Prometheus metrics, 4xx
-  invalid-request handling, non-streaming chat, and SSE ending once in
+- The internal inference contract is limited to health, Prometheus metrics,
+  4xx invalid-request handling, non-streaming chat, and SSE ending once in
   `[DONE]`.
 - The future gateway is a separate Deployment and Helm release. It depends on
-  the inference Service contract and does not run as an inference sidecar.
+  the inference Service chat/SSE behavior and does not run as an inference
+  sidecar. Its external-client contract is separate and does not expose
+  inference metrics.
+- The ClusterIP-only inference server restricts CORS to localhost and disables
+  CORS credentials. The future gateway owns external-client access policy.
 - Contract tests are invoked when needed from the host, CI, or a temporary
   in-cluster test; they are not a permanent workload.
 
@@ -84,9 +88,12 @@ or a universal runtime plugin mechanism at this stage.
    benchmark consumers.
 5. Recreate the live inference workload while retaining the PVC and exact model
    artifact.
-6. Verify Pod readiness, model-init reuse, Windows-local UI, health, metrics,
-   invalid-request handling, non-streaming chat, and SSE.
-7. Reuse the API contract unchanged against the future gateway URL.
+6. Verify Pod readiness, model-init reuse, Windows-local UI, and the internal
+   inference contract: health, metrics, invalid-request handling,
+   non-streaming chat, and SSE.
+7. When the gateway exists, verify a separate external-client contract without
+   exposing inference metrics.
 
-Steps 1 through 6 passed on 2026-07-31. Step 7 remains part of the private
-external-access milestone.
+Steps 1 through 6 passed on 2026-07-31. The inference CORS boundary was then
+restricted and reverified. Step 7 remains part of the private external-access
+milestone.
