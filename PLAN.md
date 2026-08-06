@@ -105,8 +105,8 @@ Completed:
   as Helm revision 5. The healthy retained target was verified and reused
   without recopying, and the replacement Pod reached Ready.
 - Restricted inference CORS to localhost, disabled CORS credentials, and kept
-  operational metrics in an internal inference contract rather than requiring
-  the future external gateway to expose them.
+  operational metrics in an internal inference contract; the separate
+  Gateway does not expose them.
 - Pinned the Phase 0 nginx and BusyBox validation images by digest and repeated
   their server-side validation on the ARM64 K3s node.
 
@@ -125,14 +125,36 @@ foundation image digests](docs/verification/inference-boundary-hardening-2026-07
 
 ## Phase 3 — Private external access
 
-**Status:** pending.
+**Status:** in progress. The local Gateway boundary passed on 2026-08-06;
+Tailscale and external-device verification remain.
 
-- Route enrolled external PC and Android devices through Tailscale and a
-  gateway; never expose `llama-server` directly.
-- Define and verify a dedicated external-client contract for streaming,
-  request policy, unavailable backend, and network-loss cases. Do not expose
-  inference `/metrics` as part of that contract.
-- Keep the Android app to a minimal validation client.
+Completed:
+
+- Deployed a separate digest-pinned Envoy ARM64 Deployment and Helm release.
+- Published only the fixed-model Web UI, `GET /health`, and
+  `POST /v1/chat/completions`, and `POST /v1/messages`; denied internal metrics,
+  runtime, slot, model list, token-count, and model-management paths.
+- Kept the UI to message entry, SSE display, and cancellation without model
+  switching or generation settings.
+- Verified request-size, method, media-type, security-header, deny-by-default,
+  OpenAI and Anthropic non-streaming, and both SSE contracts through the
+  Gateway Service with `max_tokens: 512`.
+- Configured a fixed public model alias and verified that neither API exposes
+  the inference Pod's internal model mount path.
+- Verified sanitized 503 responses from a missing inference backend without
+  exposing the in-cluster DNS name or connection details.
+- Replaced the Windows-local direct inference path with a localhost-only
+  port-forward to the Gateway Service.
+
+Remaining:
+
+- Route enrolled external PC and Android devices through Tailscale; never
+  expose `llama-server` directly.
+- Verify tailnet policy, external browser/API access, SSE, and network loss.
+- Build only the minimal Android validation client.
+
+**Evidence:** [Gateway decision](docs/adr/0006-use-envoy-with-a-fixed-client-ui.md)
+and [local Gateway verification](docs/verification/inference-gateway-local-2026-08-06.md).
 
 ## Phase 4 — Observability and benchmarks
 

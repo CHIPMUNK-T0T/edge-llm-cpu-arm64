@@ -41,19 +41,21 @@ With the localhost-only port-forward running, verify the internal inference
 contract:
 
 ```bash
-tests/inference-api-contract.sh http://localhost:18080
+tests/inference-api-contract.sh http://localhost:18081
 ```
 
 The inference contract covers health, localhost-only browser origins,
 Prometheus metrics, invalid-request handling, non-streaming chat, and
 multi-frame SSE with one terminal `[DONE]` event. Metrics are an internal
-operational endpoint. The future gateway gets a separate external-client
-contract and must not expose `/metrics` merely to reuse this test.
+operational endpoint. The separate Gateway has its own external-client
+contract and does not expose `/metrics`.
 
 `llama-server` accepts browser origins only from localhost and disables CORS
 credentials. It has no application API key because it remains a ClusterIP-only
-backend. External access must terminate at the future gateway, which owns
-client access policy and must not expose the inference Service directly.
+backend. Client access terminates at the Gateway, which owns request policy and
+does not expose the inference Service directly. The runtime uses the reviewed
+model filename as its public API alias, so responses do not reveal the internal
+`/models` mount path.
 
 A valid existing target is reused without reading the host source. If the
 expected target exists but fails its size or SHA-256 check, model init first
@@ -120,20 +122,21 @@ kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml \
   --container prepare-model
 ```
 
-In a separate terminal, start the localhost-only operator path:
+For an explicit internal-contract check, use a separate localhost port from
+the client-facing Gateway path:
 
 ```bash
 kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml \
   --namespace edge-llm \
   port-forward --address=127.0.0.1 \
-  service/north-mini-code 18080:8080
+  service/north-mini-code 18081:8080
 ```
 
 Then verify it:
 
 ```bash
-curl --compressed --fail --output /dev/null http://localhost:18080/
-curl --fail http://localhost:18080/health
+curl --compressed --fail --output /dev/null http://localhost:18081/
+curl --fail http://localhost:18081/health
 ```
 
 The embedded UI asset is gzip encoded. Command-line UI checks must advertise

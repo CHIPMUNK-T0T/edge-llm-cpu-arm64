@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "inference-gateway.fullname" . }}
+  labels:
+    {{- include "inference-gateway.commonLabels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+data:
+  envoy.yaml: |
+{{ tpl (.Files.Get "files/envoy.yaml") . | nindent 4 }}
+  index.html: |
+{{ tpl (.Files.Get "files/index.html") . | nindent 4 }}
+  app.js: |
+{{ .Files.Get "files/app.js" | nindent 4 }}
+  style.css: |
+{{ .Files.Get "files/style.css" | nindent 4 }}

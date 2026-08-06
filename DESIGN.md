@@ -18,7 +18,7 @@ clients, observe it, measure it, and recover it when it fails.
 | Inference runtime | official versioned `llama.cpp` `llama-server` ARM64 image |
 | Model | North Mini Code 1.0 Q4_0 GGUF |
 | Remote network | private Tailscale tailnet |
-| Client | embedded Web UI; minimal Android streaming client; PC command-line client |
+| Client | Gateway fixed-model Web UI; minimal Android client (planned); PC client |
 
 The tracked default profile binds the verified model identity, quantization,
 artifact hash, official runtime image digest, and serving controls. The profile
@@ -32,17 +32,19 @@ record. A static contract checks its filename, quantization, size, hash,
 repository revision, and benchmark model ID against their deployment and
 download consumers.
 
-The `charts/north-mini-code` chart is the only serving definition in the
-current repository. It manages one Deployment, one ClusterIP Service, and one
-retained model PVC through Helm release `north-mini-code`. Helm values are the
-composition root, the PVC mount is the model-artifact interface, and the
-ClusterIP Service is the inference network interface.
+The `charts/north-mini-code` chart is the only inference definition. It
+manages one Deployment, one ClusterIP Service, and one retained model PVC
+through Helm release `north-mini-code`. The separate
+`charts/inference-gateway` chart manages the client boundary through Helm
+release `inference-gateway`. Helm values are the composition roots, the PVC
+mount is the model-artifact interface, and Kubernetes Service DNS is the
+network contract between the two releases.
 
 ## Logical architecture
 
 ```text
 [Android client (planned)] ----\
-                                +-- [Tailscale (planned)] --> [Gateway Deployment (planned)]
+                                +-- [Tailscale (planned)] --> [Envoy Gateway Deployment]
 [External PC (planned)] --------/                                  separate release
                                                                           |
                                                                [Inference Service]
@@ -57,7 +59,7 @@ ClusterIP Service is the inference network interface.
           |
 [Grafana (planned)]
 
-[Windows browser] -- localhost-only port-forward --> [K3s Service]
+[Windows browser] -- localhost-only port-forward --> [Envoy Gateway Service]
 ```
 
 ## Boundaries and responsibilities
@@ -70,7 +72,7 @@ ClusterIP Service is the inference network interface.
 | K3s | Scheduling and lifecycle of in-cluster workloads | Multi-node availability |
 | Helm chart | Declarative serving configuration, release history, upgrade, and rollback | Preserving availability on this single node |
 | Model init | Place an exact size/SHA-verified GGUF at the PVC contract path before inference starts | Serving HTTP requests |
-| `llama-server` | OpenAI-compatible inference and streaming | Public exposure or durable authorization |
+| `llama-server` | OpenAI- and Anthropic-compatible inference and streaming | Public exposure or durable authorization |
 | PVC | Model storage persistence within the lab | Distributed storage durability |
 | Android client | End-to-end streaming and client-side experience measurements | Product-grade UX or distribution |
 
@@ -103,16 +105,18 @@ ClusterIP Service is the inference network interface.
 - **Upstream runtime package:** use the official versioned ARM64 server image
   instead of maintaining a custom build. Pin the platform digest and validate
   the model, Web UI, security context, and API behavior on this host.
-- **Embedded Web UI:** retain the upstream Web UI as the primary human-operated
-  client. External access will still pass through Tailscale and the gateway;
-  the UI does not make direct public exposure acceptable.
-- **Windows-local validation:** before building the external path, bind
-  `kubectl port-forward` only to `127.0.0.1` and verify the K3s-hosted embedded
-  UI from the Windows browser. This is a temporary operator path, not the final
-  ingress architecture.
-- **One Helm source:** do not retain raw serving manifests beside the chart.
-  The Helm chart is the only serving definition, avoiding configuration drift
-  from parallel deployment paths.
+- **Gateway-owned Web UI:** expose a small same-origin UI from Envoy rather
+  than proxying the embedded upstream UI. It uses the fixed served model and
+  offers no model switch or generation settings. This keeps model metadata,
+  slots, metrics, properties, and model-management routes outside the client
+  contract.
+- **Windows-local validation:** bind `kubectl port-forward` only to
+  `127.0.0.1` and verify the K3s-hosted Gateway from the Windows browser.
+  This is a temporary operator path, not the final Tailscale route. Restart a
+  long-running port-forward after its target Pod is replaced.
+- **One Helm source per workload:** do not retain raw serving manifests beside
+  either chart. The inference and Gateway charts are their respective
+  deployment definitions, avoiding drift from parallel deployment paths.
 - **Model preparation in the Pod lifecycle:** an init container executes a
   separately testable script that copies the profile-selected host GGUF only
   when the PVC does not contain the verified artifact and checks its exact size
@@ -124,13 +128,19 @@ ClusterIP Service is the inference network interface.
   localhost-only browser origins, Prometheus metrics, 4xx invalid-request
   handling, non-streaming
   `/v1/chat/completions`, and multi-frame SSE ending once in `[DONE]`. The
-  future external gateway has a separate client contract for access policy,
-  chat, SSE, and backend failures; it does not expose inference metrics as a
-  client endpoint. Neither contract claims the full OpenAI API surface.
+  external Gateway contract guarantees its fixed UI, public health,
+  OpenAI-compatible `/v1/chat/completions`, Anthropic-compatible `/v1/messages`,
+  both non-streaming and SSE modes, deny-by-default routing, and sanitized
+  backend failures. Both formats share the same inference process and reviewed
+  `max_tokens: 512` client setting. The runtime returns a fixed model alias
+  instead of its internal mount path. The Gateway does not expose inference
+  metrics or `/v1/messages/count_tokens`. Neither contract claims the complete
+  OpenAI or Anthropic API surface.
 - **Browser-origin boundary:** the ClusterIP-only inference server restricts
-  CORS to localhost and disables CORS credentials for the temporary operator
-  UI path. It has no application API key. Tailscale clients must terminate at
-  the future gateway, which owns external access policy.
+  CORS to localhost and disables CORS credentials. Gateway browser calls are
+  same-origin, so the Gateway does not add broad CORS. It has no application
+  API key; future remote clients terminate at the Gateway through the private
+  Tailscale path.
 - **Artifact identity per release:** a release and its retained PVC bind one
   model filename, size, and SHA-256. A different artifact uses a different
   release/PVC rather than an in-place profile mutation that could retain two

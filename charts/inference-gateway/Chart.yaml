@@ -1,0 +1,6 @@
+apiVersion: v2
+name: inference-gateway
+description: Private client gateway for the ARM64 K3s inference service
+type: application
+version: 0.1.0
+appVersion: "1.39.0"

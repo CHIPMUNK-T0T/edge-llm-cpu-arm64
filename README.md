@@ -10,15 +10,19 @@ to use the service through a gateway. The focus is the engineering process:
 architecture, deployment, observability, benchmarks, failure recovery, and
 documented trade-offs.
 
-> Status (2026-07-31): Phases 0, 1, and 2 passed. The ARM64 K3s foundation, pinned
+> Status (2026-08-06): Phases 0, 1, and 2 passed. The ARM64 K3s foundation, pinned
 > North Mini Code Q4_0 artifact, official `llama-server` runtime, one Ready
 > inference Pod, Windows-local Web UI, and chat API are verified. Helm is the
 > only serving definition; static checks, controlled upgrade, rollback,
 > uninstall, and normal reinstall all succeeded. The reinstall retained the
 > existing model PVC and exact model SHA without a 17 GB recopy. UI, health,
 > metrics, error handling, chat, and explicit SSE checks pass through the K3s
-> Service. Chart `0.2.1` now separates the reviewed model/runtime profile,
+> Service. Chart `0.2.2` separates the reviewed model/runtime profile,
 > site-specific placement, PVC artifact contract, and Service/API contract.
+> A separate Envoy Gateway now provides the Windows-local fixed-model UI,
+> public health, and OpenAI- and Anthropic-compatible chat/SSE contracts while
+> denying operational and
+> model-management routes. Tailscale and external-device validation remain.
 
 ## Demonstrated so far
 
@@ -36,10 +40,16 @@ documented trade-offs.
   health, browser origins, metrics, error handling, chat, and SSE
 - Localhost-restricted CORS at the ClusterIP inference backend; external-client
   policy remains a gateway responsibility
+- Separate digest-pinned Envoy Gateway Deployment and Helm release
+- Fixed-model browser UI without model or generation-setting controls
+- Allowlisted health, OpenAI chat/SSE, and Anthropic Messages/SSE client surface
+  with internal endpoints denied
+- Fixed public model alias without exposing the inference Pod mount path
+- Sanitized backend-unavailable responses without internal connection details
 
 ## Planned portfolio scope
 
-- Private external access through Tailscale and a gateway
+- Private external access to the Gateway through Tailscale
 - LLM performance and operational observability
 - Failure diagnosis and recovery under realistic resource constraints
 - Reproducible infrastructure, benchmarks, and documentation
@@ -58,7 +68,7 @@ Android client or external PC
             |
        Tailscale tailnet
             |
-   Gateway / reverse proxy
+   Envoy Gateway + fixed Web UI
             |
        K3s Service
             |
@@ -89,14 +99,15 @@ host and WSL2 baseline.
 - [Kubernetes-native contract refactor verification](docs/verification/north-mini-code-contract-refactor-2026-07-31.md)
 - [Inference boundary and foundation image verification](docs/verification/inference-boundary-hardening-2026-07-31.md)
 - [Kubernetes-native contract boundary decision](docs/adr/0005-use-kubernetes-native-contract-boundaries.md)
+- [Envoy and fixed client UI decision](docs/adr/0006-use-envoy-with-a-fixed-client-ui.md)
+- [Local inference Gateway verification](docs/verification/inference-gateway-local-2026-08-06.md)
 
 ## Repository map
 
 - `config/` — host/K3s configuration under version control
 - `scripts/` — reproducible K3s, Helm, and model-download entry points
 - `kubernetes/` — foundation and storage validation workloads
-- `charts/` — current Helm deployment source for the inference workload
-- `gateway/` — reverse-proxy and access policy (planned)
+- `charts/` — Helm sources for the inference and Gateway workloads
 - `monitoring/` — metrics and dashboards (planned)
 - `benchmark/` — repeatable inputs and raw results
 - `tests/` — reusable chart, artifact, and inference API contracts

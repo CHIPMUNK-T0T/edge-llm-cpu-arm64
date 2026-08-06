@@ -53,6 +53,9 @@ grep -q -- '- --no-cors-credentials' "$work_dir/baseline-deployment.yaml" || \
 grep -q 'edge-llm/profile-name: "north-mini-code-1.0-q4-0-llama-cpp-b10108"' \
   "$work_dir/baseline-deployment.yaml" || \
   fail 'reviewed profile name is not observable on the Pod template'
+grep -A1 -- '- --alias' "$work_dir/baseline-deployment.yaml" | \
+  grep -q 'North-Mini-Code-1.0-Q4_0.gguf' || \
+  fail 'reviewed public model alias is missing'
 awk '/^  selector:/{copy=1} /^  template:/{copy=0} copy' \
   "$work_dir/baseline-deployment.yaml" >"$work_dir/deployment-selector.yaml"
 awk '/^  selector:/{copy=1} /^  ports:/{copy=0} copy' \
@@ -85,6 +88,9 @@ helm template profile-contract "$chart" --namespace edge-llm \
   >"$work_dir/profile.yaml"
 grep -q '/models/fixture-Q4.gguf' "$work_dir/profile.yaml" || \
   fail 'injected model profile did not reach the runtime contract'
+grep -A1 -- '- --alias' "$work_dir/profile.yaml" | \
+  grep -q 'fixture-Q4.gguf' || \
+  fail 'injected model profile did not reach the public API alias'
 grep -q 'edge-llm/profile-name: "fixture-q4-profile"' "$work_dir/profile.yaml" || \
   fail 'injected profile name is not observable on the Pod template'
 

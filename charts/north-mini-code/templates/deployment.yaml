@@ -74,6 +74,8 @@ spec:
           args:
             - --model
             - {{ printf "/models/%s" .Values.profile.model.fileName | quote }}
+            - --alias
+            - {{ .Values.profile.model.fileName | quote }}
             - --host
             - 0.0.0.0
             - --port

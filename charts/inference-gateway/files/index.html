@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <meta name="edge-llm-model" content="{{ .Values.upstream.modelId }}">
+    <title>Edge LLM Chat</title>
+    <link rel="stylesheet" href="/style.css">
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="header">
+        <div>
+          <p class="eyebrow">ARM64 K3s inference</p>
+          <h1>Edge LLM Chat</h1>
+        </div>
+        <div class="health" aria-live="polite">
+          <span id="health-dot" class="health-dot"></span>
+          <span id="health-text">接続確認中</span>
+        </div>
+      </header>
+
+      <section id="conversation" class="conversation" aria-live="polite">
+        <div class="empty" id="empty-state">
+          <p>この画面はK3s上でサーブされている固定モデルへの検証用クライアントです。</p>
+          <p>モデル変更や生成パラメーター設定は提供しません。</p>
+        </div>
+      </section>
+
+      <form id="chat-form" class="composer">
+        <label class="sr-only" for="message">メッセージ</label>
+        <textarea
+          id="message"
+          name="message"
+          rows="3"
+          maxlength="12000"
+          placeholder="メッセージを入力"
+          required
+        ></textarea>
+        <div class="actions">
+          <span id="request-status" class="request-status" aria-live="polite"></span>
+          <button id="stop-button" class="secondary" type="button" hidden>停止</button>
+          <button id="send-button" type="submit">送信</button>
+        </div>
+      </form>
+    </main>
+  </body>
+</html>

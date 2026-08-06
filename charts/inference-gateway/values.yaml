@@ -1,0 +1,40 @@
+replicaCount: 1
+
+image:
+  repository: docker.io/envoyproxy/envoy
+  tag: distroless-v1.39.0
+  digest: sha256:8dbb967dba5d22a28f0e7974173aa6d4a5621ce48ac6d44142d9b4d9c960af14
+
+upstream:
+  host: north-mini-code.edge-llm.svc.cluster.local
+  port: 8080
+  modelId: North-Mini-Code-1.0-Q4_0.gguf
+
+gateway:
+  requestBodyLimitBytes: 1048576
+  connectTimeoutSeconds: 2
+  healthTimeoutSeconds: 3
+  streamIdleTimeoutSeconds: 900
+  terminationGracePeriodSeconds: 30
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: "1"
+    memory: 256Mi
+
+probes:
+  startup:
+    periodSeconds: 2
+    timeoutSeconds: 1
+    failureThreshold: 30
+  readiness:
+    periodSeconds: 5
+    timeoutSeconds: 1
+    failureThreshold: 3
+  liveness:
+    periodSeconds: 10
+    timeoutSeconds: 1
+    failureThreshold: 3

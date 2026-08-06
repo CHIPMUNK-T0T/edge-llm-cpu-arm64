@@ -1,0 +1,296 @@
+static_resources:
+  listeners:
+    - name: public
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 8080
+      per_connection_buffer_limit_bytes: 1048576
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: public
+                normalize_path: true
+                merge_slashes: true
+                path_with_escaped_slashes_action: REJECT_REQUEST
+                request_headers_timeout: 10s
+                stream_error_on_invalid_http_message: true
+                server_name: inference-gateway
+                server_header_transformation: OVERWRITE
+                proxy_status_config:
+                  remove_details: true
+                  remove_connection_termination_details: true
+                  remove_response_flags: true
+                local_reply_config:
+                  mappers:
+                    - filter:
+                        status_code_filter:
+                          comparison:
+                            op: EQ
+                            value:
+                              default_value: 503
+                              runtime_key: gateway.local_reply.service_unavailable
+                      body_format_override:
+                        text_format_source:
+                          inline_string: '{"error":{"message":"inference unavailable","type":"service_unavailable"}}'
+                        content_type: application/json
+                    - filter:
+                        status_code_filter:
+                          comparison:
+                            op: EQ
+                            value:
+                              default_value: 504
+                              runtime_key: gateway.local_reply.gateway_timeout
+                      body_format_override:
+                        text_format_source:
+                          inline_string: '{"error":{"message":"inference timeout","type":"gateway_timeout"}}'
+                        content_type: application/json
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                      log_format:
+                        json_format:
+                          timestamp: "%START_TIME%"
+                          request_id: "%REQ(X-REQUEST-ID)%"
+                          method: "%REQ(:METHOD)%"
+                          path: "%REQ(:PATH)%"
+                          status: "%RESPONSE_CODE%"
+                          duration_ms: "%DURATION%"
+                          upstream_duration_ms: "%RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)%"
+                          bytes_received: "%BYTES_RECEIVED%"
+                          bytes_sent: "%BYTES_SENT%"
+                route_config:
+                  name: public
+                  max_direct_response_body_size_bytes: 65536
+                  virtual_hosts:
+                    - name: public
+                      domains:
+                        - "*"
+                      response_headers_to_remove:
+                        - x-envoy-upstream-service-time
+                      response_headers_to_add:
+                        - header:
+                            key: x-content-type-options
+                            value: nosniff
+                          append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - header:
+                            key: x-frame-options
+                            value: DENY
+                          append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - header:
+                            key: referrer-policy
+                            value: no-referrer
+                          append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - header:
+                            key: permissions-policy
+                            value: camera=(), microphone=(), geolocation=()
+                          append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - header:
+                            key: content-security-policy
+                            value: "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+                          append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                      routes:
+                        - match:
+                            path: /
+                            headers:
+                              - name: ":method"
+                                string_match:
+                                  exact: GET
+                          direct_response:
+                            status: 200
+                            body:
+                              filename: /config/index.html
+                          response_headers_to_add:
+                            - header:
+                                key: content-type
+                                value: text/html; charset=utf-8
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                            - header:
+                                key: cache-control
+                                value: no-store
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - match:
+                            path: /app.js
+                            headers:
+                              - name: ":method"
+                                string_match:
+                                  exact: GET
+                          direct_response:
+                            status: 200
+                            body:
+                              filename: /config/app.js
+                          response_headers_to_add:
+                            - header:
+                                key: content-type
+                                value: application/javascript; charset=utf-8
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                            - header:
+                                key: cache-control
+                                value: no-store
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - match:
+                            path: /style.css
+                            headers:
+                              - name: ":method"
+                                string_match:
+                                  exact: GET
+                          direct_response:
+                            status: 200
+                            body:
+                              filename: /config/style.css
+                          response_headers_to_add:
+                            - header:
+                                key: content-type
+                                value: text/css; charset=utf-8
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                            - header:
+                                key: cache-control
+                                value: no-store
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - match:
+                            path: /health
+                            headers:
+                              - name: ":method"
+                                string_match:
+                                  exact: GET
+                          route:
+                            cluster: inference
+                            timeout: {{ .Values.gateway.healthTimeoutSeconds }}s
+                        - match:
+                            path: /health
+                          direct_response:
+                            status: 405
+                            body:
+                              inline_string: '{"error":{"message":"method not allowed","type":"method_not_allowed"}}'
+                          response_headers_to_add:
+                            - header:
+                                key: content-type
+                                value: application/json
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - match:
+                            path: /v1/chat/completions
+                            headers:
+                              - name: ":method"
+                                string_match:
+                                  exact: POST
+                              - name: content-type
+                                string_match:
+                                  prefix: application/json
+                                  ignore_case: true
+                          route:
+                            cluster: inference
+                            timeout: 0s
+                            idle_timeout: {{ .Values.gateway.streamIdleTimeoutSeconds }}s
+                            max_stream_duration:
+                              max_stream_duration: {{ .Values.gateway.streamIdleTimeoutSeconds }}s
+                        - match:
+                            path: /v1/chat/completions
+                            headers:
+                              - name: ":method"
+                                string_match:
+                                  exact: POST
+                          direct_response:
+                            status: 415
+                            body:
+                              inline_string: '{"error":{"message":"application/json required","type":"unsupported_media_type"}}'
+                          response_headers_to_add:
+                            - header:
+                                key: content-type
+                                value: application/json
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - match:
+                            path: /v1/chat/completions
+                          direct_response:
+                            status: 405
+                            body:
+                              inline_string: '{"error":{"message":"method not allowed","type":"method_not_allowed"}}'
+                          response_headers_to_add:
+                            - header:
+                                key: content-type
+                                value: application/json
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - match:
+                            path: /v1/messages
+                            headers:
+                              - name: ":method"
+                                string_match:
+                                  exact: POST
+                              - name: content-type
+                                string_match:
+                                  prefix: application/json
+                                  ignore_case: true
+                          route:
+                            cluster: inference
+                            timeout: 0s
+                            idle_timeout: {{ .Values.gateway.streamIdleTimeoutSeconds }}s
+                            max_stream_duration:
+                              max_stream_duration: {{ .Values.gateway.streamIdleTimeoutSeconds }}s
+                        - match:
+                            path: /v1/messages
+                            headers:
+                              - name: ":method"
+                                string_match:
+                                  exact: POST
+                          direct_response:
+                            status: 415
+                            body:
+                              inline_string: '{"error":{"message":"application/json required","type":"unsupported_media_type"}}'
+                          response_headers_to_add:
+                            - header:
+                                key: content-type
+                                value: application/json
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - match:
+                            path: /v1/messages
+                          direct_response:
+                            status: 405
+                            body:
+                              inline_string: '{"error":{"message":"method not allowed","type":"method_not_allowed"}}'
+                          response_headers_to_add:
+                            - header:
+                                key: content-type
+                                value: application/json
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - match:
+                            prefix: /
+                          direct_response:
+                            status: 404
+                            body:
+                              inline_string: '{"error":{"message":"not found","type":"not_found"}}'
+                          response_headers_to_add:
+                            - header:
+                                key: content-type
+                                value: application/json
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                http_filters:
+                  - name: envoy.filters.http.buffer
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.buffer.v3.Buffer
+                      max_request_bytes: {{ int .Values.gateway.requestBodyLimitBytes }}
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+  clusters:
+    - name: inference
+      type: STRICT_DNS
+      connect_timeout: {{ .Values.gateway.connectTimeoutSeconds }}s
+      dns_lookup_family: V4_ONLY
+      load_assignment:
+        cluster_name: inference
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: {{ .Values.upstream.host }}
+                      port_value: {{ .Values.upstream.port }}
+
+admin:
+  access_log_path: /dev/null
+  address:
+    socket_address:
+      address: 0.0.0.0
+      port_value: 9901
