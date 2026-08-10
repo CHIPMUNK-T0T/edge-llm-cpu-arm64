@@ -149,6 +149,10 @@
         }
       }
 
+      if (!state.done) {
+        throw new Error("stream ended before terminal [DONE]");
+      }
+
       var displayContent = state.content || state.reasoning;
       if (!displayContent.trim()) {
         throw new Error("model returned no displayable content");

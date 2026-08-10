@@ -126,16 +126,22 @@ network contract between the two releases.
   import Job/Deployment race at the cost of verifying the file on each start.
 - **Contract scope:** the internal inference adapter guarantees health,
   localhost-only browser origins, Prometheus metrics, 4xx invalid-request
-  handling, non-streaming
-  `/v1/chat/completions`, and multi-frame SSE ending once in `[DONE]`. The
+  handling, OpenAI-compatible `/v1/chat/completions` and Anthropic-compatible
+  `/v1/messages`, in both non-streaming and SSE modes. OpenAI SSE ends once
+  in `[DONE]`; Anthropic SSE ends in `message_stop`. The
   external Gateway contract guarantees its fixed UI, public health,
   OpenAI-compatible `/v1/chat/completions`, Anthropic-compatible `/v1/messages`,
   both non-streaming and SSE modes, deny-by-default routing, and sanitized
-  backend failures. Both formats share the same inference process and reviewed
+  Envoy-generated missing-upstream and timeout replies. Both formats share the same
+  inference process and reviewed
   `max_tokens: 512` client setting. The runtime returns a fixed model alias
   instead of its internal mount path. The Gateway does not expose inference
   metrics or `/v1/messages/count_tokens`. Neither contract claims the complete
   OpenAI or Anthropic API surface.
+- **Gateway administration boundary:** Envoy admin port 9901 is omitted from
+  the Service but binds the Pod interface so kubelet can run readiness and
+  liveness probes. It is therefore reachable inside the cluster Pod network;
+  no NetworkPolicy isolation is claimed at this stage.
 - **Browser-origin boundary:** the ClusterIP-only inference server restricts
   CORS to localhost and disables CORS credentials. Gateway browser calls are
   same-origin, so the Gateway does not add broad CORS. It has no application

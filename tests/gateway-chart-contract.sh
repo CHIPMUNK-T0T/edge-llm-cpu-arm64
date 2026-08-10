@@ -59,8 +59,15 @@ grep -q 'filename: /config/index.html' "$work_dir/configmap.yaml" || \
   fail 'minimal Web UI route is missing'
 grep -q 'max_request_bytes: 1048576' "$work_dir/configmap.yaml" || \
   fail 'request body limit is missing'
-grep -q 'timeout: 0s' "$work_dir/configmap.yaml" || \
-  fail 'streaming route has a total request timeout'
+[ "$(grep -c 'timeout: 0s' "$work_dir/configmap.yaml")" -eq 2 ] || \
+  fail 'both streaming routes must disable the total request timeout'
+[ "$(grep -c 'idle_timeout:' "$work_dir/configmap.yaml")" -eq 2 ] || \
+  fail 'both streaming routes must define an idle timeout'
+[ "$(grep -c 'regex: "(?i)^application/json' "$work_dir/configmap.yaml")" -eq 2 ] || \
+  fail 'both public API routes must enforce the JSON media-type contract'
+if grep -q 'prefix: application/json' "$work_dir/configmap.yaml"; then
+  fail 'JSON media-type matching must not accept prefix near misses'
+fi
 grep -q 'prefix: /' "$work_dir/configmap.yaml" || \
   fail 'deny-by-default route is missing'
 for internal_path in /metrics /props /slots /v1/models /models/load /v1/messages/count_tokens; do
@@ -75,6 +82,8 @@ if grep -Eiq '<select|type="range"|temperature|top[_ -]?p|model selector' \
   "$work_dir/configmap.yaml"; then
   fail 'UI contains a model or generation settings control'
 fi
+grep -q 'stream ended before terminal \[DONE\]' "$work_dir/configmap.yaml" || \
+  fail 'UI terminal-event guard is missing'
 
 grep -q 'app.kubernetes.io/instance: alternate-gateway' "$work_dir/alternate.yaml" || \
   fail 'alternate release identity is missing'
@@ -85,6 +94,12 @@ if helm template inference-gateway "$chart" --namespace edge-llm \
   --set-string image.repository=untrusted.example/envoy \
   >"$work_dir/invalid-image.out" 2>"$work_dir/invalid-image.err"; then
   fail 'arbitrary gateway image was accepted'
+fi
+
+if helm template inference-gateway "$chart" --namespace edge-llm \
+  --set-string 'upstream.modelId="><script>' \
+  >"$work_dir/invalid-model.out" 2>"$work_dir/invalid-model.err"; then
+  fail 'unsafe model identity was accepted'
 fi
 
 printf 'Gateway chart contract: PASS\n'

@@ -43,9 +43,14 @@ model switching or generation settings.
 
 The Gateway routes to the inference Service through Kubernetes DNS. It limits
 request bodies, does not retry chat POSTs, preserves SSE streaming, removes
-upstream timing headers, emits metadata-only access logs, and converts upstream
-503 and 504 failures into stable JSON without internal connection details.
-Envoy admin port 9901 is not published by the Service.
+upstream timing headers, and emits metadata-only access logs. Envoy-generated
+local replies are configured to use stable JSON for an unavailable upstream
+(503) and request timeout (504). Both the missing-upstream 503 and a controlled
+delayed-upstream 504 are verified without internal connection details.
+Application-generated upstream errors pass through unless separately covered
+by a contract.
+Envoy admin port 9901 is not published by the Service, but it binds the Pod
+interface for kubelet probes and is reachable from the cluster Pod network.
 
 The pinned `llama-server` runtime implements both client protocols in the same
 process. Envoy forwards both paths to the same inference Service; it does not
@@ -76,7 +81,10 @@ public model alias so neither API response exposes the internal model path.
 - Verify non-streaming and SSE responses for both `/v1/chat/completions` and
   `/v1/messages` with `max_tokens: 512`.
 - Verify that internal inference routes return 404.
-- Point a temporary Gateway release at a missing upstream and verify sanitized
-  503 responses for both health and chat.
+- Run tests/gateway-unavailable-contract.sh to point a temporary Gateway release
+  at a missing upstream and verify sanitized Envoy-generated 503 responses for
+  health and both chat formats.
+- Run tests/gateway-timeout-contract.sh with a temporary delayed backend and
+  verify a sanitized Envoy-generated 504 health response.
 - Verify the Windows browser UI and later repeat the contract from enrolled
   Tailscale clients.

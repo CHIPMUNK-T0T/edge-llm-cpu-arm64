@@ -136,13 +136,21 @@ Completed:
   runtime, slot, model list, token-count, and model-management paths.
 - Kept the UI to message entry, SSE display, and cancellation without model
   switching or generation settings.
+- Verified normal streaming completion and cancellation from the Windows
+  browser, including restoration of the input and Send control.
 - Verified request-size, method, media-type, security-header, deny-by-default,
   OpenAI and Anthropic non-streaming, and both SSE contracts through the
   Gateway Service with `max_tokens: 512`.
+- Verified both API formats directly against inference, exact model identity
+  across the profile and Gateway, and strict JSON media types. Statically
+  confirmed that the UI contains a terminal-event guard for early SSE
+  disconnects.
 - Configured a fixed public model alias and verified that neither API exposes
   the inference Pod's internal model mount path.
 - Verified sanitized 503 responses from a missing inference backend without
   exposing the in-cluster DNS name or connection details.
+- Verified a sanitized 504 response from a controlled delayed backend without
+  changing or stopping the inference workload.
 - Replaced the Windows-local direct inference path with a localhost-only
   port-forward to the Gateway Service.
 

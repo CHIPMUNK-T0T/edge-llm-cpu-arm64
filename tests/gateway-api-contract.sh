@@ -3,7 +3,7 @@
 set -eu
 
 base_url="${1:-${GATEWAY_BASE_URL:-}}"
-model_id="${GATEWAY_MODEL_ID:-North-Mini-Code-1.0-Q4_0.gguf}"
+model_id="${GATEWAY_MODEL_ID:-}"
 connect_timeout="${GATEWAY_CONNECT_TIMEOUT_SECONDS:-5}"
 request_timeout="${GATEWAY_REQUEST_TIMEOUT_SECONDS:-180}"
 
@@ -39,7 +39,7 @@ status_for() {
     "$1"
 }
 
-printf '1/10 Web UI and browser security headers\n'
+printf '1/11 Web UI and browser security headers\n'
 ui_status="$(curl --silent --show-error \
   --connect-timeout "$connect_timeout" \
   --max-time "$request_timeout" \
@@ -61,7 +61,15 @@ for asset in app.js style.css; do
   [ -s "$work_dir/$asset" ] || fail "UI asset is empty: $asset"
 done
 
-printf '2/10 public health contract\n'
+ui_model_id="$(sed -n 's/.*<meta name="edge-llm-model" content="\([^"]*\)">.*/\1/p' \
+  "$work_dir/index.html")"
+[ -n "$ui_model_id" ] || fail 'fixed model identity is missing from the Web UI'
+if [ -n "$model_id" ] && [ "$model_id" != "$ui_model_id" ]; then
+  fail 'GATEWAY_MODEL_ID does not match the Web UI model identity'
+fi
+model_id="${model_id:-$ui_model_id}"
+
+printf '2/11 public health contract\n'
 [ "$(status_for "$base_url/health" "$work_dir/health.json")" = 200 ] || \
   fail 'health endpoint did not return HTTP 200'
 python3 - "$work_dir/health.json" <<'PY'
@@ -74,13 +82,22 @@ if payload.get("status") != "ok":
     raise SystemExit("health response does not report status ok")
 PY
 
-printf '3/10 internal endpoint isolation\n'
+printf '3/11 internal endpoint isolation\n'
 for path in metrics props slots v1/models models/load v1/messages/count_tokens; do
-  status="$(status_for "$base_url/$path" "$work_dir/internal-response.json")"
-  [ "$status" = 404 ] || fail "internal endpoint /$path returned HTTP $status"
+  for method in GET POST; do
+    status="$(curl --silent --show-error \
+      --connect-timeout "$connect_timeout" \
+      --max-time "$request_timeout" \
+      --request "$method" \
+      --output "$work_dir/internal-response.json" \
+      --write-out '%{http_code}' \
+      "$base_url/$path")"
+    [ "$status" = 404 ] || \
+      fail "$method on internal endpoint /$path returned HTTP $status"
+  done
 done
 
-printf '4/10 method and media-type policy\n'
+printf '4/11 method and media-type policy\n'
 for endpoint in v1/chat/completions v1/messages; do
   [ "$(status_for "$base_url/$endpoint" "$work_dir/method.json")" = 405 ] || \
     fail "GET on /$endpoint did not return HTTP 405"
@@ -94,13 +111,33 @@ for endpoint in v1/chat/completions v1/messages; do
     "$base_url/$endpoint")"
   [ "$media_status" = 415 ] || \
     fail "non-JSON request to /$endpoint returned HTTP $media_status"
+  near_miss_status="$(curl --silent --show-error \
+    --connect-timeout "$connect_timeout" \
+    --max-time "$request_timeout" \
+    --header 'Content-Type: application/jsonp' \
+    --data-binary '{}' \
+    --output "$work_dir/media-near-miss.json" \
+    --write-out '%{http_code}' \
+    "$base_url/$endpoint")"
+  [ "$near_miss_status" = 415 ] || \
+    fail "JSON prefix near miss on /$endpoint returned HTTP $near_miss_status"
+  charset_status="$(curl --silent --show-error \
+    --connect-timeout "$connect_timeout" \
+    --max-time "$request_timeout" \
+    --header 'Content-Type: Application/JSON; charset=UTF-8' \
+    --data-binary '{}' \
+    --output "$work_dir/media-charset.json" \
+    --write-out '%{http_code}' \
+    "$base_url/$endpoint")"
+  [ "$charset_status" != 415 ] || \
+    fail "valid JSON media type with charset was rejected on /$endpoint"
 done
 
 cat >"$work_dir/non-stream-request.json" <<EOF
 {"model":"$model_id","messages":[{"role":"user","content":"Reply with exactly: hello"}],"max_tokens":512,"temperature":0,"stream":false}
 EOF
 
-printf '5/10 OpenAI-compatible non-streaming chat contract\n'
+printf '5/11 OpenAI-compatible non-streaming chat contract\n'
 curl --fail --silent --show-error \
   --connect-timeout "$connect_timeout" \
   --max-time "$request_timeout" \
@@ -131,7 +168,7 @@ cat >"$work_dir/stream-request.json" <<EOF
 {"model":"$model_id","messages":[{"role":"user","content":"Reply with exactly: one two three"}],"max_tokens":512,"temperature":0,"stream":true}
 EOF
 
-printf '6/10 OpenAI-compatible SSE streaming contract\n'
+printf '6/11 OpenAI-compatible SSE streaming contract\n'
 curl --fail --silent --show-error --no-buffer \
   --connect-timeout "$connect_timeout" \
   --max-time "$request_timeout" \
@@ -184,7 +221,7 @@ cat >"$work_dir/anthropic-non-stream-request.json" <<EOF
 {"model":"$model_id","messages":[{"role":"user","content":"Reply with exactly: hello"}],"max_tokens":512,"temperature":0,"stream":false}
 EOF
 
-printf '7/10 Anthropic-compatible non-streaming Messages contract\n'
+printf '7/11 Anthropic-compatible non-streaming Messages contract\n'
 curl --fail --silent --show-error \
   --connect-timeout "$connect_timeout" \
   --max-time "$request_timeout" \
@@ -226,7 +263,7 @@ cat >"$work_dir/anthropic-stream-request.json" <<EOF
 {"model":"$model_id","messages":[{"role":"user","content":"Reply with exactly: one two three"}],"max_tokens":512,"temperature":0,"stream":true}
 EOF
 
-printf '8/10 Anthropic-compatible SSE Messages contract\n'
+printf '8/11 Anthropic-compatible SSE Messages contract\n'
 curl --fail --silent --show-error --no-buffer \
   --connect-timeout "$connect_timeout" \
   --max-time "$request_timeout" \
@@ -285,11 +322,24 @@ if not "".join(output).strip():
     raise SystemExit("Anthropic SSE contains no reconstructed model output")
 PY
 
-printf '9/10 deny-by-default route\n'
+printf '9/11 request body limit\n'
+dd if=/dev/zero of="$work_dir/oversize.bin" bs=1048577 count=1 2>/dev/null
+oversize_status="$(curl --silent --show-error \
+  --connect-timeout "$connect_timeout" \
+  --max-time "$request_timeout" \
+  --header 'Content-Type: application/json' \
+  --data-binary "@$work_dir/oversize.bin" \
+  --output "$work_dir/oversize-response.json" \
+  --write-out '%{http_code}' \
+  "$base_url/v1/messages")"
+[ "$oversize_status" = 413 ] || \
+  fail "oversized request returned HTTP $oversize_status"
+
+printf '10/11 deny-by-default route\n'
 [ "$(status_for "$base_url/not-a-public-route" "$work_dir/not-found.json")" = 404 ] || \
   fail 'unknown route did not return HTTP 404'
 
-printf '10/10 response metadata isolation\n'
+printf '11/11 response metadata isolation\n'
 curl --silent --show-error \
   --connect-timeout "$connect_timeout" \
   --max-time "$request_timeout" \

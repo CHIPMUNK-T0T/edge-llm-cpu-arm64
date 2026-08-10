@@ -12,8 +12,8 @@ splitting every function into a Pod would add ordering, ownership, and failure
 coordination that this single-node lab does not need.
 
 The current model import is an ordered prerequisite of inference and shares the
-same retained PVC. The future gateway has a different security boundary,
-update cadence, and failure domain from inference.
+same retained PVC. The gateway has a different security boundary, update
+cadence, and failure domain from inference.
 
 ## Options considered
 
@@ -45,14 +45,15 @@ Use option 3, a small ports-and-adapters design expressed through Kubernetes:
 - The ClusterIP Service is the stable inference interface. Consumers know its
   DNS name and named HTTP port, not a Pod name or IP.
 - The internal inference contract is limited to health, Prometheus metrics,
-  4xx invalid-request handling, non-streaming chat, and SSE ending once in
-  `[DONE]`.
-- The future gateway is a separate Deployment and Helm release. It depends on
+  4xx invalid-request handling, and the normal/SSE subsets of
+  OpenAI-compatible `/v1/chat/completions` and Anthropic-compatible
+  `/v1/messages`.
+- The gateway is a separate Deployment and Helm release. It depends on
   the inference Service chat/SSE behavior and does not run as an inference
   sidecar. Its external-client contract is separate and does not expose
   inference metrics.
 - The ClusterIP-only inference server restricts CORS to localhost and disables
-  CORS credentials. The future gateway owns external-client access policy.
+  CORS credentials. The gateway owns external-client access policy.
 - Contract tests are invoked when needed from the host, CI, or a temporary
   in-cluster test; they are not a permanent workload.
 
@@ -89,11 +90,16 @@ or a universal runtime plugin mechanism at this stage.
 5. Recreate the live inference workload while retaining the PVC and exact model
    artifact.
 6. Verify Pod readiness, model-init reuse, Windows-local UI, and the internal
-   inference contract: health, metrics, invalid-request handling,
-   non-streaming chat, and SSE.
-7. When the gateway exists, verify a separate external-client contract without
-   exposing inference metrics.
+   inference contract: health, metrics, invalid-request handling, and
+   normal/SSE responses for both API formats.
+7. Verify the separate gateway contract without exposing inference metrics:
+   fixed UI, health, OpenAI-compatible and Anthropic-compatible chat, normal
+   responses, SSE termination, request policy, and sanitized local failures.
 
-Steps 1 through 6 passed on 2026-07-31. The inference CORS boundary was then
-restricted and reverified. Step 7 remains part of the private external-access
-milestone.
+Steps 1 through 5 and the then-current OpenAI-focused Step 6 passed on
+2026-07-31. The inference CORS boundary was then restricted and reverified.
+The expanded Step 6, including the direct Anthropic-compatible normal and SSE
+contracts, and Step 7 both passed locally on 2026-08-06; see
+[ADR-0006](0006-use-envoy-with-a-fixed-client-ui.md) and the
+[Gateway verification](../verification/inference-gateway-local-2026-08-06.md).
+Tailscale client verification remains a separate external-access milestone.

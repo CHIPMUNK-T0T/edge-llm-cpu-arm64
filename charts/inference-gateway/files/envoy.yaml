@@ -178,8 +178,9 @@ static_resources:
                                   exact: POST
                               - name: content-type
                                 string_match:
-                                  prefix: application/json
-                                  ignore_case: true
+                                  safe_regex:
+                                    google_re2: {}
+                                    regex: "(?i)^application/json(?:[ \\t]*;[ \\t]*charset=[A-Za-z0-9._-]+)?[ \\t]*$"
                           route:
                             cluster: inference
                             timeout: 0s
@@ -220,8 +221,9 @@ static_resources:
                                   exact: POST
                               - name: content-type
                                 string_match:
-                                  prefix: application/json
-                                  ignore_case: true
+                                  safe_regex:
+                                    google_re2: {}
+                                    regex: "(?i)^application/json(?:[ \\t]*;[ \\t]*charset=[A-Za-z0-9._-]+)?[ \\t]*$"
                           route:
                             cluster: inference
                             timeout: 0s

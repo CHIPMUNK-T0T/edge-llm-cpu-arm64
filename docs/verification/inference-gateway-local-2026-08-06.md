@@ -1,9 +1,10 @@
 # Local inference Gateway verification
 
 - **Date:** 2026-08-06
+- **Additional validation:** 2026-08-10
 - **Environment:** Surface Laptop 7, WSL2 Ubuntu ARM64, single-node K3s
-- **Gateway release:** inference-gateway, namespace edge-llm, Helm revision 4
-- **Chart:** inference-gateway-0.1.0
+- **Gateway release:** inference-gateway, namespace edge-llm, Helm revision 5
+- **Chart:** inference-gateway-0.1.1
 - **Image:** envoyproxy/envoy:distroless-v1.39.0
 - **ARM64 digest:** sha256:8dbb967dba5d22a28f0e7974173aa6d4a5621ce48ac6d44142d9b4d9c960af14
 - **Inference release:** north-mini-code, Helm revision 7
@@ -20,7 +21,9 @@ model-management endpoints internal.
 
 These commands passed:
 
+    tests/profile-consistency.sh
     tests/gateway-chart-contract.sh
+    node --check charts/inference-gateway/files/app.js
 
     helm upgrade --install inference-gateway charts/inference-gateway \
       --namespace edge-llm \
@@ -32,15 +35,19 @@ The static contract rendered exactly one ConfigMap, Deployment, and ClusterIP
 Service. It verified the pinned image, non-root and read-only security context,
 disabled ServiceAccount token mount, one published Service port, route
 allowlist for both chat formats, request-size limit, streaming timeout policy,
-and fixed-model UI.
+strict JSON media types, safe fixed-model identity, early SSE-disconnect
+guard presence, and fixed-model UI. The profile contract also verified that the
+Gateway model identity matches the canonical artifact profile.
 
 ## Live workload
 
-Gateway Helm revision 4 and inference Helm revision 7 reached deployed. Both
+Gateway Helm revision 5 and inference Helm revision 7 reached deployed. Both
 Deployments reached 1/1 available with one Running Pod each and zero restarts.
 The Gateway Service published only port 8080; Envoy admin port 9901 remained
-outside the Service. The inference runtime used a public model alias instead
-of its internal model mount path.
+outside the Service. Port 9901 still binds the Pod interface for kubelet probes
+and is reachable from the cluster Pod network; no NetworkPolicy isolation is
+claimed. The inference runtime used a public model alias instead of its
+internal model mount path.
 
 Windows-local access used this one-line command:
 
@@ -57,21 +64,21 @@ The final command was:
 
     tests/gateway-api-contract.sh http://localhost:18080
 
-All ten groups passed with `max_tokens: 512` for both API formats:
+All eleven groups passed with `max_tokens: 512` for both API formats:
 
 1. Web UI, local assets, and browser security headers;
 2. public health;
-3. 404 isolation of metrics, properties, slots, model list, and model load;
-4. method and JSON media-type policy for both chat paths;
+3. GET and POST 404 isolation of metrics, properties, slots, model list, token
+   count, and model load;
+4. method and strict JSON media-type policy for both chat paths, including
+   rejection of `application/jsonp` and acceptance of a charset parameter;
 5. OpenAI-compatible non-streaming chat;
 6. OpenAI-compatible multi-frame SSE with one final `[DONE]`;
 7. Anthropic-compatible non-streaming Messages;
 8. Anthropic-compatible SSE ending in `message_stop`;
-9. deny-by-default unknown routes;
-10. removal of upstream timing and wildcard CORS response metadata.
-
-A separate 1,048,577-byte POST to `/v1/messages` was rejected with HTTP 413,
-confirming the configured 1 MiB request-body limit.
+9. HTTP 413 for a 1,048,577-byte request, confirming the 1 MiB body limit;
+10. deny-by-default unknown routes;
+11. removal of upstream timing and wildcard CORS response metadata.
 
 The selected model can stream reasoning before final content. The OpenAI
 contract reconstructs `reasoning_content` and `content`; the Anthropic contract
@@ -80,16 +87,68 @@ returned the fixed public model alias rather than an internal `/models` path.
 The 512 value is the reviewed client setting, not a Gateway-enforced JSON
 rewrite or a server-side cap on arbitrary client requests.
 
-## Unavailable upstream
+The direct inference contract also passed all eight groups. It verifies health,
+localhost CORS, metrics, invalid-request handling, OpenAI-compatible normal and
+SSE responses, and Anthropic-compatible normal and SSE responses. This proves
+that both API formats are supplied by the inference runtime rather than
+translated by the Gateway.
 
-A temporary gateway-unavailable release used a nonexistent in-cluster
-inference DNS name. GET /health, POST /v1/chat/completions, and POST
-/v1/messages all returned HTTP 503 with:
+With a temporary port-forward to the inference Service on port 18081, the
+commands were:
+
+    kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml --namespace edge-llm port-forward service/north-mini-code 18081:8080 --address 127.0.0.1
+    tests/inference-api-contract.sh http://127.0.0.1:18081
+
+## Unavailable and timed-out upstream
+
+This reusable command created a temporary Gateway release with a nonexistent
+in-cluster inference DNS name and removed it after the checks:
+
+    tests/gateway-unavailable-contract.sh
+
+GET /health, POST /v1/chat/completions, and POST /v1/messages all returned
+Envoy-generated HTTP 503 with:
 
     {"error":{"message":"inference unavailable","type":"service_unavailable"}}
 
-The response contained neither the internal DNS name nor upstream connection
-details. The temporary release was removed after the check.
+The response body and headers contained neither the internal DNS name nor
+upstream connection details. The test explicitly uninstalled the temporary
+release, confirmed that it no longer existed, and only then reported PASS.
+
+The timeout contract used the already pinned BusyBox ARM64 image as a temporary
+backend that accepts each connection and delays its response. It injected a
+one-second health timeout into a separate temporary Gateway release:
+
+    tests/gateway-timeout-contract.sh
+
+GET /health returned Envoy-generated HTTP 504 with
+`Content-Type: application/json` and:
+
+    {"error":{"message":"inference timeout","type":"gateway_timeout"}}
+
+The response body and headers contained no backend name, upstream connection
+details, or timing header. The test removed and confirmed the absence of the
+temporary Helm release, Pod, Service, and ConfigMap before reporting PASS. The
+normal inference release was not modified or stopped.
+
+## Browser UI smoke
+
+The UI document and assets returned HTTP 200, browser security headers passed,
+and `app.js` passed JavaScript syntax validation. The Chart contract statically
+confirms that the UI contains a guard requiring terminal `[DONE]`.
+
+On 2026-08-10, the Windows browser UI passed a manual smoke check after the
+Gateway and inference Pods recovered from a WSL2 restart:
+
+1. A normal prompt showed the generating state and Stop control, streamed model
+   output, then restored the enabled message input and Send control.
+2. A long prompt was stopped after partial output appeared. Generation stopped,
+   the partial output remained visible, and the enabled message input and Send
+   control returned.
+3. The UI health indicator reported `利用可能` after both checks.
+
+This verifies the intended user-visible send and cancel behavior. It does not
+simulate an involuntary network disconnect in the browser.
 
 ## Remaining boundary
 

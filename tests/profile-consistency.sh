@@ -5,6 +5,7 @@ set -eu
 repository_root="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 model_config="$repository_root/config/models/north-mini-code-q4-0.yaml"
 chart_values="$repository_root/charts/north-mini-code/values.yaml"
+gateway_values="$repository_root/charts/inference-gateway/values.yaml"
 download_script="$repository_root/scripts/download-north-mini-code-q4-0.sh"
 benchmark_input="$repository_root/benchmark/inputs/north-mini-code-q4-0-k3s-smoke.json"
 
@@ -35,6 +36,12 @@ chart_value() {
     "$chart_values"
 }
 
+gateway_value() {
+  key="$1"
+  awk -v key="$key" '$1 == key ":" { gsub(/"/, "", $2); print $2; exit }' \
+    "$gateway_values"
+}
+
 script_value() {
   key="$1"
   sed -n 's/^'"$key"'="\(.*\)"$/\1/p' "$download_script"
@@ -51,6 +58,7 @@ assert_equal filename "$canonical_filename" "$(chart_value fileName)"
 assert_equal quantization "$canonical_quantization" "$(chart_value quantization)"
 assert_equal sizeBytes "$canonical_size" "$(chart_value sizeBytes)"
 assert_equal sha256 "$canonical_sha256" "$(chart_value sha256)"
+assert_equal gateway-model-id "$canonical_filename" "$(gateway_value modelId)"
 
 assert_equal download-filename "$canonical_filename" "$(script_value filename)"
 assert_equal download-size "$canonical_size" "$(script_value expected_size)"
