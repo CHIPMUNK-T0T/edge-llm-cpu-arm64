@@ -84,6 +84,13 @@ if grep -Eiq '<select|type="range"|temperature|top[_ -]?p|model selector' \
 fi
 grep -q 'stream ended before terminal \[DONE\]' "$work_dir/configmap.yaml" || \
   fail 'UI terminal-event guard is missing'
+grep -q 'var requestMessages = messages.concat' "$work_dir/configmap.yaml" || \
+  fail 'UI pending-turn history is missing'
+grep -q 'messages = requestMessages.concat' "$work_dir/configmap.yaml" || \
+  fail 'UI does not commit a completed turn atomically'
+if grep -q 'messages.push({ role: "user"' "$work_dir/configmap.yaml"; then
+  fail 'UI commits a user turn before inference completes'
+fi
 
 grep -q 'app.kubernetes.io/instance: alternate-gateway' "$work_dir/alternate.yaml" || \
   fail 'alternate release identity is missing'
@@ -100,6 +107,12 @@ if helm template inference-gateway "$chart" --namespace edge-llm \
   --set-string 'upstream.modelId="><script>' \
   >"$work_dir/invalid-model.out" 2>"$work_dir/invalid-model.err"; then
   fail 'unsafe model identity was accepted'
+fi
+
+if helm template inference-gateway "$chart" --namespace edge-llm \
+  --set-string upstream.modelId=model-without-gguf-suffix \
+  >"$work_dir/invalid-model-suffix.out" 2>"$work_dir/invalid-model-suffix.err"; then
+  fail 'non-GGUF model identity was accepted'
 fi
 
 printf 'Gateway chart contract: PASS\n'

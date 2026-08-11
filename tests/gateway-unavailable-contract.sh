@@ -19,32 +19,55 @@ fail() {
 }
 
 cleanup() {
+  exit_status=$?
+  trap - EXIT HUP INT TERM
+  cleanup_failed=0
   if [ -n "$port_forward_pid" ]; then
     kill "$port_forward_pid" 2>/dev/null || true
     wait "$port_forward_pid" 2>/dev/null || true
   fi
   if [ "$release_created" -eq 1 ]; then
-    helm uninstall "$release" \
+    if ! helm uninstall "$release" \
       --namespace "$namespace" \
-      --kubeconfig "$kubeconfig" >/dev/null 2>&1 || true
+      --kubeconfig "$kubeconfig" >/dev/null 2>&1; then
+      printf 'CLEANUP FAIL: could not uninstall temporary release: %s\n' \
+        "$release" >&2
+      cleanup_failed=1
+    fi
+    if helm status "$release" --namespace "$namespace" --kubeconfig "$kubeconfig" \
+      >/dev/null 2>&1; then
+      printf 'CLEANUP FAIL: temporary release remains: %s\n' "$release" >&2
+      cleanup_failed=1
+    fi
   fi
-  rm -rf -- "$work_dir"
+  if ! rm -rf -- "$work_dir"; then
+    printf 'CLEANUP FAIL: could not remove work directory: %s\n' "$work_dir" >&2
+    cleanup_failed=1
+  fi
+  if [ "$cleanup_failed" -ne 0 ] && [ "$exit_status" -eq 0 ]; then
+    exit_status=1
+  fi
+  exit "$exit_status"
 }
-trap cleanup EXIT HUP INT TERM
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 if helm status "$release" --namespace "$namespace" --kubeconfig "$kubeconfig" \
   >/dev/null 2>&1; then
   fail "temporary release already exists: $release"
 fi
 
-release_created=1
 helm install "$release" "$chart" \
   --namespace "$namespace" \
   --create-namespace \
   --kubeconfig "$kubeconfig" \
   --set-string "upstream.host=missing-inference.$namespace.svc.cluster.local" \
+  --rollback-on-failure \
   --wait=watcher \
   --timeout 3m >/dev/null
+release_created=1
 
 kubectl --kubeconfig "$kubeconfig" --namespace "$namespace" \
   port-forward "service/$release" "$local_port:8080" --address 127.0.0.1 \

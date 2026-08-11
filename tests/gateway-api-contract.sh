@@ -182,7 +182,7 @@ tr -d '\r' <"$work_dir/stream-headers.txt" >"$work_dir/stream-headers-normalized
 grep -Eiq '^content-type:[[:space:]]*text/event-stream([[:space:]]*;|[[:space:]]*$)' \
   "$work_dir/stream-headers-normalized.txt" || \
   fail 'SSE content type is not text/event-stream'
-python3 - "$work_dir/stream-body.txt" <<'PY'
+python3 - "$work_dir/stream-body.txt" "$model_id" <<'PY'
 import json
 import sys
 
@@ -204,6 +204,13 @@ if len(frames) < 2:
     raise SystemExit(f"SSE returned fewer than two JSON frames: {len(frames)}")
 if done != 1 or not events or events[-1] != "[DONE]":
     raise SystemExit("SSE terminal event is invalid")
+unexpected_models = sorted(
+    {repr(frame.get("model")) for frame in frames if frame.get("model") != sys.argv[2]}
+)
+if unexpected_models:
+    raise SystemExit(
+        "OpenAI SSE model alias is unexpected: " + ", ".join(unexpected_models)
+    )
 content = []
 for frame in frames:
     choices = frame.get("choices")
@@ -280,13 +287,14 @@ tr -d '\r' <"$work_dir/anthropic-stream-headers.txt" \
 grep -Eiq '^content-type:[[:space:]]*text/event-stream([[:space:]]*;|[[:space:]]*$)' \
   "$work_dir/anthropic-stream-headers-normalized.txt" || \
   fail 'Anthropic SSE content type is not text/event-stream'
-python3 - "$work_dir/anthropic-stream-body.txt" <<'PY'
+python3 - "$work_dir/anthropic-stream-body.txt" "$model_id" <<'PY'
 import json
 import sys
 
 event_names = []
 output = []
 pending_event = None
+start_models = []
 with open(sys.argv[1], encoding="utf-8") as response:
     for raw_line in response:
         line = raw_line.rstrip("\r\n")
@@ -298,6 +306,11 @@ with open(sys.argv[1], encoding="utf-8") as response:
             if pending_event and payload.get("type") != pending_event:
                 raise SystemExit(
                     f"Anthropic SSE event/data type mismatch: {pending_event}"
+                )
+            if payload.get("type") == "message_start":
+                message = payload.get("message")
+                start_models.append(
+                    message.get("model") if isinstance(message, dict) else None
                 )
             delta = payload.get("delta")
             if isinstance(delta, dict):
@@ -318,22 +331,26 @@ if missing:
     raise SystemExit(f"Anthropic SSE events are missing: {', '.join(missing)}")
 if not event_names or event_names[-1] != "message_stop":
     raise SystemExit("Anthropic SSE terminal event is invalid")
+if start_models != [sys.argv[2]]:
+    raise SystemExit(f"Anthropic SSE model alias is unexpected: {start_models!r}")
 if not "".join(output).strip():
     raise SystemExit("Anthropic SSE contains no reconstructed model output")
 PY
 
 printf '9/11 request body limit\n'
 dd if=/dev/zero of="$work_dir/oversize.bin" bs=1048577 count=1 2>/dev/null
-oversize_status="$(curl --silent --show-error \
-  --connect-timeout "$connect_timeout" \
-  --max-time "$request_timeout" \
-  --header 'Content-Type: application/json' \
-  --data-binary "@$work_dir/oversize.bin" \
-  --output "$work_dir/oversize-response.json" \
-  --write-out '%{http_code}' \
-  "$base_url/v1/messages")"
-[ "$oversize_status" = 413 ] || \
-  fail "oversized request returned HTTP $oversize_status"
+for endpoint in v1/chat/completions v1/messages; do
+  oversize_status="$(curl --silent --show-error \
+    --connect-timeout "$connect_timeout" \
+    --max-time "$request_timeout" \
+    --header 'Content-Type: application/json' \
+    --data-binary "@$work_dir/oversize.bin" \
+    --output "$work_dir/oversize-response.json" \
+    --write-out '%{http_code}' \
+    "$base_url/$endpoint")"
+  [ "$oversize_status" = 413 ] || \
+    fail "oversized request to /$endpoint returned HTTP $oversize_status"
+done
 
 printf '10/11 deny-by-default route\n'
 [ "$(status_for "$base_url/not-a-public-route" "$work_dir/not-found.json")" = 404 ] || \

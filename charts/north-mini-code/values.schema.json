@@ -48,7 +48,7 @@
           "properties": {
             "fileName": {
               "type": "string",
-              "pattern": "^[^/]+\\.gguf$"
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,249}\\.gguf$"
             },
             "format": {
               "const": "GGUF"

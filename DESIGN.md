@@ -124,7 +124,7 @@ network contract between the two releases.
   (`SOURCE_FILE`, `TARGET_FILE`, `EXPECTED_SIZE`, and
   `EXPECTED_SHA256`) and one verified file at the PVC path. This avoids an
   import Job/Deployment race at the cost of verifying the file on each start.
-- **Contract scope:** the internal inference adapter guarantees health,
+- **Contract scope:** the internal inference contract guarantees health,
   localhost-only browser origins, Prometheus metrics, 4xx invalid-request
   handling, OpenAI-compatible `/v1/chat/completions` and Anthropic-compatible
   `/v1/messages`, in both non-streaming and SSE modes. OpenAI SSE ends once
@@ -138,6 +138,10 @@ network contract between the two releases.
   instead of its internal mount path. The Gateway does not expose inference
   metrics or `/v1/messages/count_tokens`. Neither contract claims the complete
   OpenAI or Anthropic API surface.
+- **Browser conversation boundary:** the UI keeps conversation context only in
+  browser memory. It commits a user/assistant turn to the next request only
+  after the terminal SSE event is received. Canceled or failed turns remain
+  visible for operator feedback but are not sent as subsequent context.
 - **Gateway administration boundary:** Envoy admin port 9901 is omitted from
   the Service but binds the Pod interface so kubelet can run readiness and
   liveness probes. It is therefore reachable inside the cluster Pod network;

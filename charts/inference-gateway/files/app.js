@@ -99,11 +99,14 @@
     }
   }
 
-  async function streamChat() {
+  async function streamChat(userContent) {
     activeController = new AbortController();
     setBusy(true);
     var assistantBody = addMessage("assistant", "");
     var state = { content: "", reasoning: "", done: false };
+    var requestMessages = messages.concat([
+      { role: "user", content: userContent }
+    ]);
 
     try {
       var response = await fetch("/v1/chat/completions", {
@@ -114,7 +117,7 @@
         },
         body: JSON.stringify({
           model: modelId,
-          messages: messages,
+          messages: requestMessages,
           max_tokens: 512,
           stream: true
         }),
@@ -158,10 +161,15 @@
         throw new Error("model returned no displayable content");
       }
       assistantBody.textContent = displayContent;
-      messages.push({ role: "assistant", content: displayContent });
+      messages = requestMessages.concat([
+        { role: "assistant", content: displayContent }
+      ]);
     } catch (error) {
       if (error.name === "AbortError") {
-        assistantBody.textContent = state.content || state.reasoning || "生成を停止しました。";
+        var partialContent = state.content || state.reasoning;
+        assistantBody.textContent = partialContent
+          ? partialContent + "\n\n（生成を停止しました）"
+          : "生成を停止しました。";
         requestStatus.textContent = "停止しました";
       } else {
         assistantBody.textContent = "リクエストに失敗しました。時間を置いて再試行してください。";
@@ -181,10 +189,9 @@
     if (!content || activeController) {
       return;
     }
-    messages.push({ role: "user", content: content });
     addMessage("user", content);
     input.value = "";
-    streamChat();
+    streamChat(content);
   });
 
   input.addEventListener("keydown", function (event) {

@@ -79,6 +79,12 @@ if helm template north-mini-code "$chart" --namespace edge-llm \
   fail 'unpinned or unsupported runtime image was accepted'
 fi
 
+if helm template north-mini-code "$chart" --namespace edge-llm \
+  --set-string 'profile.model.fileName=unsafe model.gguf' \
+  >"$work_dir/invalid-model.out" 2>"$work_dir/invalid-model.err"; then
+  fail 'unsafe public model identity was accepted'
+fi
+
 helm template profile-contract "$chart" --namespace edge-llm \
   --set-string profile.name=fixture-q4-profile \
   --set-string profile.model.fileName=fixture-Q4.gguf \

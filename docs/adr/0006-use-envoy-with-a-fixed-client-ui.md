@@ -59,6 +59,12 @@ The reviewed requests use `max_tokens: 512`. This is a tested client contract,
 not an Envoy-enforced upper bound. The inference runtime is configured with a
 public model alias so neither API response exposes the internal model path.
 
+The browser UI treats each streamed exchange transactionally. It adds the
+user and assistant messages to subsequent request context only after the
+terminal `[DONE]` event. A canceled or failed exchange remains visible to the
+operator but is not included in the next request body. Conversation state is
+not persisted outside browser memory.
+
 ## Consequences
 
 - Client behavior no longer depends on the complete upstream UI/API surface.
@@ -67,6 +73,8 @@ public model alias so neither API response exposes the internal model path.
   inference process, resource limits, and failure domain.
 - The UI remains intentionally small and has no persistent history or product
   features.
+- Partial output is retained for visibility without allowing an incomplete
+  exchange to alter later model context.
 - Envoy configuration and browser JavaScript must both understand the
   inference SSE fields used by the selected model.
 - The current localhost port-forward is not remote access or authentication.
@@ -88,3 +96,5 @@ public model alias so neither API response exposes the internal model path.
   verify a sanitized Envoy-generated 504 health response.
 - Verify the Windows browser UI and later repeat the contract from enrolled
   Tailscale clients.
+- Verify in the Windows browser that completed exchanges are retained and a
+  canceled exchange is excluded from the next request context.

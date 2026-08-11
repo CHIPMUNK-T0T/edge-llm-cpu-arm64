@@ -125,7 +125,7 @@ foundation image digests](docs/verification/inference-boundary-hardening-2026-07
 
 ## Phase 3 — Private external access
 
-**Status:** in progress. The local Gateway boundary passed on 2026-08-06;
+**Status:** in progress. The local Gateway boundary passed on 2026-08-11;
 Tailscale and external-device verification remain.
 
 Completed:
@@ -137,20 +137,25 @@ Completed:
 - Kept the UI to message entry, SSE display, and cancellation without model
   switching or generation settings.
 - Verified normal streaming completion and cancellation from the Windows
-  browser, including restoration of the input and Send control.
-- Verified request-size, method, media-type, security-header, deny-by-default,
-  OpenAI and Anthropic non-streaming, and both SSE contracts through the
-  Gateway Service with `max_tokens: 512`.
+  browser, including restoration of the input and Send control. A completed
+  turn was available to the next request, while a canceled turn remained
+  visible but was excluded from the next request context.
+- Verified the 1 MiB request limit on both public chat routes, method,
+  media-type, security-header, deny-by-default, OpenAI and Anthropic
+  non-streaming, and both SSE contracts through the Gateway Service with
+  `max_tokens: 512`.
 - Verified both API formats directly against inference, exact model identity
-  across the profile and Gateway, and strict JSON media types. Statically
-  confirmed that the UI contains a terminal-event guard for early SSE
-  disconnects.
+  across the profile, synchronous replies, SSE frames, and Gateway, and strict
+  JSON media types. Statically confirmed that the UI contains a terminal-event
+  guard for early SSE disconnects.
 - Configured a fixed public model alias and verified that neither API exposes
   the inference Pod's internal model mount path.
 - Verified sanitized 503 responses from a missing inference backend without
   exposing the in-cluster DNS name or connection details.
 - Verified a sanitized 504 response from a controlled delayed backend without
   changing or stopping the inference workload.
+- Verified that temporary failure fixtures report cleanup errors and confirm
+  the absence of their Helm releases and Kubernetes resources before PASS.
 - Replaced the Windows-local direct inference path with a localhost-only
   port-forward to the Gateway Service.
 

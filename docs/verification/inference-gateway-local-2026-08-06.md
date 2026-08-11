@@ -1,10 +1,10 @@
 # Local inference Gateway verification
 
 - **Date:** 2026-08-06
-- **Additional validation:** 2026-08-10
+- **Additional validation:** 2026-08-10 and 2026-08-11
 - **Environment:** Surface Laptop 7, WSL2 Ubuntu ARM64, single-node K3s
-- **Gateway release:** inference-gateway, namespace edge-llm, Helm revision 5
-- **Chart:** inference-gateway-0.1.1
+- **Gateway release:** inference-gateway, namespace edge-llm, Helm revision 6
+- **Chart:** inference-gateway-0.1.2
 - **Image:** envoyproxy/envoy:distroless-v1.39.0
 - **ARM64 digest:** sha256:8dbb967dba5d22a28f0e7974173aa6d4a5621ce48ac6d44142d9b4d9c960af14
 - **Inference release:** north-mini-code, Helm revision 7
@@ -41,8 +41,11 @@ Gateway model identity matches the canonical artifact profile.
 
 ## Live workload
 
-Gateway Helm revision 5 and inference Helm revision 7 reached deployed. Both
-Deployments reached 1/1 available with one Running Pod each and zero restarts.
+Gateway Helm revision 6 and inference Helm revision 7 reached deployed. Both
+Deployments reached 1/1 available with one Running Pod each. On 2026-08-11,
+WSL2 resume caused Kubernetes `SandboxChanged` recreation; the inference Pod
+reported one prior restart, reused the verified PVC artifact, and returned to
+Ready after its startup probe allowed model loading. This was not an OOM kill.
 The Gateway Service published only port 8080; Envoy admin port 9901 remained
 outside the Service. Port 9901 still binds the Pod interface for kubelet probes
 and is reachable from the cluster Pod network; no NetworkPolicy isolation is
@@ -76,7 +79,8 @@ All eleven groups passed with `max_tokens: 512` for both API formats:
 6. OpenAI-compatible multi-frame SSE with one final `[DONE]`;
 7. Anthropic-compatible non-streaming Messages;
 8. Anthropic-compatible SSE ending in `message_stop`;
-9. HTTP 413 for a 1,048,577-byte request, confirming the 1 MiB body limit;
+9. HTTP 413 for a 1,048,577-byte request on each public chat route, confirming
+   the 1 MiB body limit;
 10. deny-by-default unknown routes;
 11. removal of upstream timing and wildcard CORS response metadata.
 
@@ -84,6 +88,8 @@ The selected model can stream reasoning before final content. The OpenAI
 contract reconstructs `reasoning_content` and `content`; the Anthropic contract
 reconstructs `thinking_delta` and `text_delta`. Both non-streaming responses
 returned the fixed public model alias rather than an internal `/models` path.
+The same exact alias was verified in all applicable OpenAI and Anthropic SSE
+frames.
 The 512 value is the reviewed client setting, not a Gateway-enforced JSON
 rewrite or a server-side cap on arbitrary client requests.
 
@@ -112,8 +118,9 @@ Envoy-generated HTTP 503 with:
     {"error":{"message":"inference unavailable","type":"service_unavailable"}}
 
 The response body and headers contained neither the internal DNS name nor
-upstream connection details. The test explicitly uninstalled the temporary
-release, confirmed that it no longer existed, and only then reported PASS.
+upstream connection details. The test preserves its original result, surfaces
+cleanup failures, explicitly uninstalls the temporary release, confirms that
+it no longer exists, and only then reports PASS.
 
 The timeout contract used the already pinned BusyBox ARM64 image as a temporary
 backend that accepts each connection and delays its response. It injected a
@@ -149,6 +156,20 @@ Gateway and inference Pods recovered from a WSL2 restart:
 
 This verifies the intended user-visible send and cancel behavior. It does not
 simulate an involuntary network disconnect in the browser.
+
+On 2026-08-11, the completed-only conversation rule passed an additional
+manual check. A completed exchange using the non-sensitive phrase
+`紀州南高梅` was available to the following request. A separate long exchange
+containing the same phrase was canceled after partial output; the UI retained
+the partial text with `（生成を停止しました）`, and the following request
+returned `不明`, confirming that the canceled exchange was not included in its
+context. An earlier opaque token containing `COMPLETED` was rejected by the
+model as password-like content, so it was unsuitable test data rather than a
+Gateway or UI failure.
+
+After the WSL2 resume, `tests/gateway-api-contract.sh
+http://127.0.0.1:18080` was rerun against Gateway revision 6 and all eleven
+groups passed in 94.3 seconds.
 
 ## Remaining boundary
 

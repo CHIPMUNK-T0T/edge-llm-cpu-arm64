@@ -10,7 +10,7 @@ to use the service through a gateway. The focus is the engineering process:
 architecture, deployment, observability, benchmarks, failure recovery, and
 documented trade-offs.
 
-> Status (2026-08-10): Phases 0, 1, and 2 passed. The ARM64 K3s foundation, pinned
+> Status (2026-08-11): Phases 0, 1, and 2 passed. The ARM64 K3s foundation, pinned
 > North Mini Code Q4_0 artifact, official `llama-server` runtime, one Ready
 > inference Pod, Windows-local Web UI, and chat API are verified. Helm is the
 > only serving definition; static checks, controlled upgrade, rollback,
@@ -19,7 +19,7 @@ documented trade-offs.
 > metrics, error handling, chat, and explicit SSE checks pass through the K3s
 > Service. Chart `0.2.2` separates the reviewed model/runtime profile,
 > site-specific placement, PVC artifact contract, and Service/API contract.
-> A separate Envoy Gateway now provides the Windows-local fixed-model UI,
+> A separate Envoy Gateway chart `0.1.2` now provides the Windows-local fixed-model UI,
 > public health, and OpenAI- and Anthropic-compatible chat/SSE contracts while
 > denying operational and
 > model-management routes. Tailscale and external-device validation remain.
@@ -43,10 +43,13 @@ documented trade-offs.
 - Separate digest-pinned Envoy Gateway Deployment and Helm release
 - Fixed-model browser UI without model or generation-setting controls
 - Windows-browser verification of normal SSE completion and user cancellation
+- Completed UI turns are retained for the next request; canceled or failed
+  turns remain visible but are excluded from subsequent request context
 - Allowlisted health, OpenAI chat/SSE, and Anthropic Messages/SSE client surface
   with internal endpoints denied
 - Direct inference and Gateway contracts for both API formats, strict JSON
-  media types, request-size policy, and terminal SSE events
+  media types, a 1 MiB limit on both public chat routes, fixed model identity,
+  and terminal SSE events
 - Fixed public model alias without exposing the inference Pod mount path
 - Sanitized Envoy-generated missing-upstream and timeout replies without
   internal connection details

@@ -37,6 +37,11 @@ tests/model-artifact-contract.sh
 tests/profile-consistency.sh
 ```
 
+`tests/profile-consistency.sh` uses the tracked profile and chart values by
+default. A fixture or replacement profile can provide `MODEL_PROFILE_FILE`,
+`INFERENCE_VALUES_FILE`, and `GATEWAY_VALUES_FILE` explicitly; all three inputs
+must exist and satisfy the same identity contract.
+
 With the localhost-only port-forward running, verify the internal inference
 contract:
 

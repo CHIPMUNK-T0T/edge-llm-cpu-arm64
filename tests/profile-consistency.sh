@@ -3,9 +3,9 @@
 set -eu
 
 repository_root="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-model_config="$repository_root/config/models/north-mini-code-q4-0.yaml"
-chart_values="$repository_root/charts/north-mini-code/values.yaml"
-gateway_values="$repository_root/charts/inference-gateway/values.yaml"
+model_config="${MODEL_PROFILE_FILE:-$repository_root/config/models/north-mini-code-q4-0.yaml}"
+chart_values="${INFERENCE_VALUES_FILE:-$repository_root/charts/north-mini-code/values.yaml}"
+gateway_values="${GATEWAY_VALUES_FILE:-$repository_root/charts/inference-gateway/values.yaml}"
 download_script="$repository_root/scripts/download-north-mini-code-q4-0.sh"
 benchmark_input="$repository_root/benchmark/inputs/north-mini-code-q4-0-k3s-smoke.json"
 
@@ -13,6 +13,10 @@ fail() {
   printf 'FAIL: %s\n' "$1" >&2
   exit 1
 }
+
+for input_file in "$model_config" "$chart_values" "$gateway_values"; do
+  [ -f "$input_file" ] || fail "profile input does not exist: $input_file"
+done
 
 assert_equal() {
   label="$1"

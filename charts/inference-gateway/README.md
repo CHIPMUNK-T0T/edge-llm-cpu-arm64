@@ -41,7 +41,13 @@ identifiers. Public API routes accept only `application/json` with an optional
 The live contract sends both API formats with `max_tokens` set to 512. This is
 the reviewed client setting, not a Gateway-enforced body rewrite or a claim
 that arbitrary client values are capped. The inference runtime returns the
-fixed public model alias rather than its internal `/models` mount path.
+fixed public model alias rather than its internal `/models` mount path. The
+contract checks that alias in synchronous replies and every applicable SSE
+frame. The 1 MiB body limit is verified on both public chat routes.
+
+The UI holds conversation state only in browser memory. It commits a turn to
+the next request only after the terminal `[DONE]` event. A canceled or failed
+turn stays visible but is excluded from later request context.
 
 ## Install or upgrade
 
@@ -78,6 +84,10 @@ A separate temporary backend accepts connections without responding, allowing
 the configured 504 local reply to be verified without modifying inference:
 
     tests/gateway-timeout-contract.sh
+
+Both failure-fixture scripts preserve the original test result, surface
+cleanup failures, and confirm that their temporary release and resources are
+absent before reporting PASS.
 
 If a Gateway upgrade replaces its Pod, restart a long-running
 kubectl port-forward before retesting. Port-forward is only the local operator
