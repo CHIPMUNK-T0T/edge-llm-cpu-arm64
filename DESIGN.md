@@ -18,7 +18,7 @@ clients, observe it, measure it, and recover it when it fails.
 | Inference runtime | official versioned `llama.cpp` `llama-server` ARM64 image |
 | Model | North Mini Code 1.0 Q4_0 GGUF |
 | Remote network | private Tailscale tailnet |
-| Client | Gateway fixed-model Web UI; minimal Android client (planned); PC client |
+| Client | Gateway fixed-model Web UI; Android browser validated on the same Wi-Fi; native Android client optional; external PC planned |
 
 The tracked default profile binds the verified model identity, quantization,
 artifact hash, official runtime image digest, and serving controls. The profile
@@ -43,23 +43,20 @@ network contract between the two releases.
 ## Logical architecture
 
 ```text
-[Android client (planned)] ----\
-                                +-- [Tailscale (planned)] --> [Envoy Gateway Deployment]
-[External PC (planned)] --------/                                  separate release
-                                                                          |
-                                                               [Inference Service]
-                                                                          |
-                                                                  [Inference Pod]
-                                                                     /        \
-                                                           [model init]  [llama-server]
-                                                                |             |
-                                                        [host GGUF] -------> [PVC]
+[Android browser] -- Tailscale IP -- [temporary Windows relay; removed] --\
+                                                                  +--> [Envoy Gateway Service]
+[Windows browser] -------- localhost-only port-forward -----------/       separate release
+                                                                               |
+                                                                    [Inference Service]
+                                                                               |
+                                                                       [Inference Pod]
+                                                                          /        \
+                                                                [model init]  [llama-server]
+                                                                     |             |
+                                                             [host GGUF] -------> [PVC]
 
-[Prometheus (planned)] <--- metrics / exporter --- gateway and workload
-          |
-[Grafana (planned)]
-
-[Windows browser] -- localhost-only port-forward --> [Envoy Gateway Service]
+[External PC / different network] -- Tailscale (planned verification)
+[Prometheus and Grafana] ---------- monitoring (planned)
 ```
 
 ## Boundaries and responsibilities
@@ -74,7 +71,7 @@ network contract between the two releases.
 | Model init | Place an exact size/SHA-verified GGUF at the PVC contract path before inference starts | Serving HTTP requests |
 | `llama-server` | OpenAI- and Anthropic-compatible inference and streaming | Public exposure or durable authorization |
 | PVC | Model storage persistence within the lab | Distributed storage durability |
-| Android client | End-to-end streaming and client-side experience measurements | Product-grade UX or distribution |
+| Browser client | End-to-end health, streaming, and cancellation checks | Product-grade UX or distribution |
 
 ## Design constraints and trade-offs
 
@@ -100,6 +97,19 @@ network contract between the two releases.
   application DI framework, CRD, Operator, or unrestricted plugin values.
 - **Tailscale rather than public ingress:** suitable for private lab access and
   remote-client verification. It does not remove the need for gateway policy.
+- **Validated tailnet path:** an enrolled Android browser reached only the
+  Gateway through a temporary Windows portproxy bound to the Windows Tailscale
+  IP. Its inbound Firewall rule allowed only that Android Tailscale IP. HTTP
+  lacked browser-level TLS, but the device-to-device path used Tailscale's
+  encrypted overlay. Both devices were on the same Wi-Fi, so this result does
+  not prove access across different networks. The relay is a verification
+  fixture, not a durable ingress design.
+- **Tailscale HTTPS limitation:** Windows Tailscale Serve accepted the intended
+  localhost proxy configuration, but TLS handshakes did not complete because
+  repeated Let's Encrypt ACME orders became `invalid`. The issue was isolated
+  from K3s, Gateway health, and Android peer connectivity. No HTTPS or
+  production security claim is made, and the failed Serve configuration is not
+  part of the implementation.
 - **GGUF quantization:** reduces RAM requirements at a quality/performance
   trade-off. The chosen quantization is an experimental result, not a default.
 - **Upstream runtime package:** use the official versioned ARM64 server image

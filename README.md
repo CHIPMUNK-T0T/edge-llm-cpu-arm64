@@ -5,8 +5,9 @@ single-node, on-premises-style environment.
 
 The project uses a Surface Laptop 7 (Windows on ARM), WSL2 Ubuntu ARM64, and
 K3s to serve a Cohere public model in GGUF format through `llama-server`. A
-private Tailscale network will enable a minimal Android client and external PCs
-to use the service through a gateway. The focus is the engineering process:
+private Tailscale tailnet was used to validate an Android browser path to the
+Gateway on the same Wi-Fi. A persistent, different-network route remains. The
+focus is the engineering process:
 architecture, deployment, observability, benchmarks, failure recovery, and
 documented trade-offs.
 
@@ -22,7 +23,11 @@ documented trade-offs.
 > A separate Envoy Gateway chart `0.1.2` now provides the Windows-local fixed-model UI,
 > public health, and OpenAI- and Anthropic-compatible chat/SSE contracts while
 > denying operational and
-> model-management routes. Tailscale and external-device validation remain.
+> model-management routes. An enrolled Android browser has also passed UI,
+> health, chat, and cancellation checks through a temporary, device-restricted
+> Windows tailnet relay on the same Wi-Fi. This verifies the Android client and
+> tailnet path, but not access from a different network. Tailscale Serve HTTPS
+> remains blocked by an ACME certificate provisioning failure.
 
 ## Demonstrated so far
 
@@ -53,10 +58,13 @@ documented trade-offs.
 - Fixed public model alias without exposing the inference Pod mount path
 - Sanitized Envoy-generated missing-upstream and timeout replies without
   internal connection details
+- Android browser access to the Gateway during a temporary Windows tailnet
+  relay test, including health, chat, and cancellation, with the Firewall rule
+  restricted to that enrolled Android device
 
 ## Planned portfolio scope
 
-- Private external access to the Gateway through Tailscale
+- Private access from a different network through Tailscale
 - LLM performance and operational observability
 - Failure diagnosis and recovery under realistic resource constraints
 - Reproducible infrastructure, benchmarks, and documentation
@@ -108,6 +116,7 @@ host and WSL2 baseline.
 - [Kubernetes-native contract boundary decision](docs/adr/0005-use-kubernetes-native-contract-boundaries.md)
 - [Envoy and fixed client UI decision](docs/adr/0006-use-envoy-with-a-fixed-client-ui.md)
 - [Local inference Gateway verification](docs/verification/inference-gateway-local-2026-08-06.md)
+- [Android tailnet same-Wi-Fi verification](docs/verification/tailscale-android-same-wifi-2026-08-11.md)
 
 ## Repository map
 
@@ -118,7 +127,7 @@ host and WSL2 baseline.
 - `monitoring/` — metrics and dashboards (planned)
 - `benchmark/` — repeatable inputs and raw results
 - `tests/` — reusable chart, artifact, and inference API contracts
-- `android-app/` — minimal external validation client (planned)
+- `android-app/` — optional minimal native API client (not started)
 - `docs/adr/` — durable architecture decision records
 
 ## Evidence standard

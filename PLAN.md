@@ -125,8 +125,8 @@ foundation image digests](docs/verification/inference-boundary-hardening-2026-07
 
 ## Phase 3 — Private external access
 
-**Status:** in progress. The local Gateway boundary passed on 2026-08-11;
-Tailscale and external-device verification remain.
+**Status:** in progress. The local Gateway boundary and same-Wi-Fi Android
+tailnet check passed on 2026-08-11. Different-network access remains.
 
 Completed:
 
@@ -158,16 +158,32 @@ Completed:
   the absence of their Helm releases and Kubernetes resources before PASS.
 - Replaced the Windows-local direct inference path with a localhost-only
   port-forward to the Gateway Service.
+- Reached the Gateway Web UI from an enrolled Android browser through the
+  Windows Tailscale IP and a temporary Windows relay. Public health, normal
+  chat, and user cancellation passed. The Firewall rule was restricted to the
+  tested Android Tailscale IP, and `llama-server` remained internal.
+- Confirmed that this Android and Windows test used the same Wi-Fi. It verifies
+  the tailnet client path but does not demonstrate off-LAN or
+  different-network connectivity.
+- Isolated a Tailscale Serve HTTPS failure to certificate provisioning:
+  Windows-local Gateway health and Android peer connectivity were healthy,
+  while two controlled Let's Encrypt ACME certificate orders became
+  `invalid`. The failed Serve and TCP fallback configurations were not adopted
+  as deployment definitions.
 
 Remaining:
 
-- Route enrolled external PC and Android devices through Tailscale; never
+- Verify the Gateway from an enrolled device on a different network; never
   expose `llama-server` directly.
-- Verify tailnet policy, external browser/API access, SSE, and network loss.
-- Build only the minimal Android validation client.
+- Select a reproducible tailnet ingress path after resolving or replacing the
+  failed Windows Tailscale Serve certificate path.
+- Verify tailnet policy, external PC API access, SSE, and network loss.
+- Add a native Android client only if it provides evidence beyond the already
+  validated browser client; it is not required for infrastructure completion.
 
 **Evidence:** [Gateway decision](docs/adr/0006-use-envoy-with-a-fixed-client-ui.md)
-and [local Gateway verification](docs/verification/inference-gateway-local-2026-08-06.md).
+and [local Gateway verification](docs/verification/inference-gateway-local-2026-08-06.md),
+plus [Android same-Wi-Fi tailnet verification](docs/verification/tailscale-android-same-wifi-2026-08-11.md).
 
 ## Phase 4 — Observability and benchmarks
 
