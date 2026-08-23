@@ -11,7 +11,7 @@ focus is the engineering process:
 architecture, deployment, observability, benchmarks, failure recovery, and
 documented trade-offs.
 
-> Status (2026-08-11): Phases 0, 1, and 2 passed. The ARM64 K3s foundation, pinned
+> Status (2026-08-23): Phases 0, 1, and 2 passed. The ARM64 K3s foundation, pinned
 > North Mini Code Q4_0 artifact, official `llama-server` runtime, one Ready
 > inference Pod, Windows-local Web UI, and chat API are verified. Helm is the
 > only serving definition; static checks, controlled upgrade, rollback,
@@ -28,6 +28,16 @@ documented trade-offs.
 > Windows tailnet relay on the same Wi-Fi. This verifies the Android client and
 > tailnet path, but not access from a different network. Tailscale Serve HTTPS
 > remains blocked by an ACME certificate provisioning failure.
+> A scoped, digest-pinned Prometheus and Grafana stack now collects K3s workload
+> CPU, memory, restarts, Gateway request/error/latency metrics, and llama.cpp
+> activity and token throughput. All required series, persistent storage, and
+> the provisioned dashboard passed on ARM64. Controlled Gateway, inference,
+> invalid model path, WSL restart, and Windows restart drills now include
+> measured recovery evidence. WSL recovery returned K3s API in 10.5 seconds and
+> external Gateway health in 253.9 seconds; model loading dominated the outage.
+> The operator-assisted Windows restart check returned K3s API in 11.2 seconds
+> from verification start and Gateway health in 68.7 seconds. Alerting,
+> resource-pressure drills, and benchmarks remain.
 
 ## Demonstrated so far
 
@@ -61,12 +71,23 @@ documented trade-offs.
 - Android browser access to the Gateway during a temporary Windows tailnet
   relay test, including health, chat, and cancellation, with the Firewall rule
   restricted to that enrolled Android device
+- Digest-pinned Prometheus and Grafana stack packaged as a small Helm wrapper
+- Internal-only ServiceMonitor and PodMonitor collection without expanding the
+  Gateway or Tailscale client surface
+- Measured CPU, memory, request, error, upstream latency, inference activity,
+  token throughput, and restart series with a provisioned read-only dashboard
+- Documented WSL2 node-exporter mount-propagation constraint and cAdvisor fallback
+- Measured Gateway Pod replacement, inference model reload, invalid model path
+  rollback, and full WSL distribution recovery with bounded, repeatable scripts
+- Repeated all Prometheus and Grafana metric contracts after WSL recovery
+- Verified an actual Windows restart with a newer boot time, serving-container
+  restart-count increases, Ready workloads, and HTTP 200 through the Gateway
 
 ## Planned portfolio scope
 
 - Private access from a different network through Tailscale
-- LLM performance and operational observability
-- Failure diagnosis and recovery under realistic resource constraints
+- Controlled LLM performance and context/concurrency benchmarks
+- Remaining resource-pressure, permission, rollout, and network failure drills
 - Reproducible infrastructure, benchmarks, and documentation
 
 ## Explicit non-goals
@@ -90,6 +111,11 @@ Android client or external PC
     llama-server Pod + PVC
             |
    Cohere public GGUF model
+
+   Prometheus <--- ServiceMonitor / PodMonitor
+        |
+     Grafana
+  (ClusterIP only)
 ```
 
 See [DESIGN.md](DESIGN.md) for boundaries and trade-offs,
@@ -117,14 +143,16 @@ host and WSL2 baseline.
 - [Envoy and fixed client UI decision](docs/adr/0006-use-envoy-with-a-fixed-client-ui.md)
 - [Local inference Gateway verification](docs/verification/inference-gateway-local-2026-08-06.md)
 - [Android tailnet same-Wi-Fi verification](docs/verification/tailscale-android-same-wifi-2026-08-11.md)
+- [Scoped monitoring decision](docs/adr/0007-use-scoped-kube-prometheus-stack.md)
+- [ARM64 K3s monitoring verification](docs/verification/edge-llm-monitoring-2026-08-23.md)
+- [Controlled failure and recovery verification](docs/verification/recovery/controlled-recovery-2026-08-23.md)
 
 ## Repository map
 
 - `config/` — host/K3s configuration under version control
 - `scripts/` — reproducible K3s, Helm, and model-download entry points
 - `kubernetes/` — foundation and storage validation workloads
-- `charts/` — Helm sources for the inference and Gateway workloads
-- `monitoring/` — metrics and dashboards (planned)
+- `charts/` — Helm sources for inference, Gateway, and monitoring workloads
 - `benchmark/` — repeatable inputs and raw results
 - `tests/` — reusable chart, artifact, and inference API contracts
 - `android-app/` — optional minimal native API client (not started)

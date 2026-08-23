@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: edge-llm-overview-dashboard
+  labels:
+    {{- include "edge-llm-monitoring.labels" . | nindent 4 }}
+    grafana_dashboard: "1"
+data:
+  edge-llm-overview.json: |-
+    {{- .Files.Get "files/edge-llm-overview.json" | nindent 4 }}

@@ -1,0 +1,171 @@
+targetNamespace: edge-llm
+
+inference:
+  selectorLabels:
+    app.kubernetes.io/name: north-mini-code
+  metricsPort: http
+  metricsPath: /metrics
+
+gateway:
+  selectorLabels:
+    app.kubernetes.io/name: inference-gateway
+  metricsPort: admin
+  metricsPath: /stats/prometheus
+
+scrapeInterval: 15s
+
+kube-prometheus-stack:
+  commonLabels:
+    monitoring.edge-llm.io/stack: edge-llm
+
+  defaultRules:
+    create: false
+
+  alertmanager:
+    enabled: false
+
+  kubeEtcd:
+    enabled: false
+  kubeControllerManager:
+    enabled: false
+  kubeScheduler:
+    enabled: false
+  kubeProxy:
+    enabled: false
+  # WSL2 does not expose / as a shared or slave mount. The upstream
+  # node-exporter DaemonSet requires that propagation mode. Workload CPU and
+  # memory are collected from kubelet/cAdvisor instead.
+  nodeExporter:
+    enabled: false
+
+  grafana:
+    defaultDashboardsEnabled: false
+    testFramework:
+      enabled: false
+    image:
+      sha: 7cb8c64c4d57a57e734073f3cc94620adb24a0acb929bd80ba9f14017e3a975b
+    initChownData:
+      image:
+        sha: dc2d74b28e4cf8984fa52af1f39bc7c3d9c73760b41a74d629f5d11b1ab28616
+    rbac:
+      namespaced: true
+    ingress:
+      enabled: false
+    service:
+      type: ClusterIP
+    serviceMonitor:
+      enabled: false
+    persistence:
+      enabled: true
+      type: sts
+      storageClassName: local-path
+      accessModes:
+        - ReadWriteOnce
+      size: 2Gi
+    grafana.ini:
+      auth:
+        disable_login_form: true
+      auth.anonymous:
+        enabled: true
+        org_role: Viewer
+    sidecar:
+      image:
+        sha: 21b9fe7bb29d65caf2445ccbf96ff6eda5e589a92bd8f5188f957fe75b551d72
+      dashboards:
+        enabled: true
+        label: grafana_dashboard
+        labelValue: "1"
+        searchNamespace: monitoring
+        provider:
+          allowUiUpdates: false
+      datasources:
+        enabled: true
+        defaultDatasourceEnabled: true
+        isDefaultDatasource: true
+        alertmanager:
+          enabled: false
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+  prometheus:
+    ingress:
+      enabled: false
+    service:
+      type: ClusterIP
+    prometheusSpec:
+      replicas: 1
+      scrapeInterval: 15s
+      evaluationInterval: 30s
+      retention: 7d
+      retentionSize: 6GB
+      serviceMonitorSelectorNilUsesHelmValues: false
+      serviceMonitorSelector:
+        matchLabels:
+          monitoring.edge-llm.io/stack: edge-llm
+      podMonitorSelectorNilUsesHelmValues: false
+      podMonitorSelector:
+        matchLabels:
+          monitoring.edge-llm.io/stack: edge-llm
+      image:
+        sha: 214f8427c8fba80c327bb94a75feb802ae12f2d6ca30812aa6e7d22f09bbea80
+      resources:
+        requests:
+          cpu: 250m
+          memory: 512Mi
+        limits:
+          cpu: "1"
+          memory: 2Gi
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: local-path
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 8Gi
+
+  prometheusOperator:
+    admissionWebhooks:
+      enabled: false
+    image:
+      sha: 7d9247d2351480fc74587e24681578f815f387bafb2ee7b86a852a94c4cd3774
+    prometheusConfigReloader:
+      image:
+        sha: 74550ba3e8bf93f47bc574231090d340ae9c01d25cd11ff74799e65f9fdb9a48
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+  kube-state-metrics:
+    prometheus:
+      monitor:
+        additionalLabels:
+          monitoring.edge-llm.io/stack: edge-llm
+    image:
+      sha: sha256:85108987d044b18a098126732f98602df408888c0f7d456241f5abefb9744bc1
+    namespaces: "edge-llm,monitoring,kube-system"
+    collectors:
+      - deployments
+      - nodes
+      - persistentvolumeclaims
+      - pods
+      - statefulsets
+      - storageclasses
+      - volumeattachments
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi

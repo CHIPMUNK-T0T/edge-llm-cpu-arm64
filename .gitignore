@@ -5,6 +5,7 @@
 # Local machine-specific configuration. Commit the example only.
 .lab-config.yaml
 .north-mini-code-values.yaml
+/.internal/
 
 # Local credentials and generated secrets.
 .env
@@ -17,3 +18,4 @@
 *.log
 *.tar
 *.tar.gz
+*.tgz

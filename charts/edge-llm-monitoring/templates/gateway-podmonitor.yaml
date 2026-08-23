@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: edge-llm-gateway
+  labels:
+    {{- include "edge-llm-monitoring.labels" . | nindent 4 }}
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ .Values.targetNamespace }}
+  selector:
+    matchLabels:
+      {{- toYaml .Values.gateway.selectorLabels | nindent 6 }}
+  podMetricsEndpoints:
+    - port: {{ .Values.gateway.metricsPort }}
+      path: {{ .Values.gateway.metricsPath }}
+      interval: {{ .Values.scrapeInterval }}
+      scheme: http

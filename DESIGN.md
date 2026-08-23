@@ -18,6 +18,7 @@ clients, observe it, measure it, and recover it when it fails.
 | Inference runtime | official versioned `llama.cpp` `llama-server` ARM64 image |
 | Model | North Mini Code 1.0 Q4_0 GGUF |
 | Remote network | private Tailscale tailnet |
+| Observability | Prometheus Operator, Prometheus, Grafana, and kube-state-metrics through a scoped Helm wrapper |
 | Client | Gateway fixed-model Web UI; Android browser validated on the same Wi-Fi; native Android client optional; external PC planned |
 
 The tracked default profile binds the verified model identity, quantization,
@@ -40,6 +41,12 @@ release `inference-gateway`. Helm values are the composition roots, the PVC
 mount is the model-artifact interface, and Kubernetes Service DNS is the
 network contract between the two releases.
 
+The `charts/edge-llm-monitoring` wrapper composes a pinned public
+`kube-prometheus-stack` dependency. Its ServiceMonitor and PodMonitor are the
+telemetry contracts for inference and Gateway. Prometheus and Grafana are
+single-replica, local-path-backed, and internal-only; Grafana is viewed through
+a localhost port-forward.
+
 ## Logical architecture
 
 ```text
@@ -56,7 +63,9 @@ network contract between the two releases.
                                                              [host GGUF] -------> [PVC]
 
 [External PC / different network] -- Tailscale (planned verification)
-[Prometheus and Grafana] ---------- monitoring (planned)
+[Prometheus] <---- [ServiceMonitor: inference /metrics]
+       ^------<--- [PodMonitor: Gateway admin metrics]
+       +----------> [Grafana; localhost operator access]
 ```
 
 ## Boundaries and responsibilities
@@ -72,12 +81,18 @@ network contract between the two releases.
 | `llama-server` | OpenAI- and Anthropic-compatible inference and streaming | Public exposure or durable authorization |
 | PVC | Model storage persistence within the lab | Distributed storage durability |
 | Browser client | End-to-end health, streaming, and cancellation checks | Product-grade UX or distribution |
+| Monitoring | Collect and retain workload, request, error, latency, restart, and inference metrics | Public telemetry, Windows host telemetry, alert delivery, or high availability |
 
 ## Design constraints and trade-offs
 
 - **Single replica:** model memory makes one replica the expected configuration
   on a 64 GB host. This makes availability a limitation to document, not a
   feature to emulate.
+- **Recovery contract:** K3s recreates deleted Pods, while Helm revision history
+  is the recovery path for an invalid site value. Neither mechanism preserves
+  availability with one replica. Measured recovery must distinguish K3s API,
+  Pod Ready, and Gateway health; model loading, not Gateway startup, dominates
+  inference and WSL restart time.
 - **Memory envelope:** cap the model workload at 40 GiB within the 48 GB WSL2
   ceiling. Any swap growth during inference is a failed performance result,
   even if the request eventually succeeds.
@@ -97,6 +112,17 @@ network contract between the two releases.
   application DI framework, CRD, Operator, or unrestricted plugin values.
 - **Tailscale rather than public ingress:** suitable for private lab access and
   remote-client verification. It does not remove the need for gateway policy.
+- **Published monitoring package:** wrap pinned `kube-prometheus-stack` instead
+  of maintaining four related systems independently. Disable Alertmanager,
+  default rules, unused K3s control-plane monitors, and admission hooks until a
+  measured requirement needs them.
+- **WSL2 monitoring boundary:** the upstream node-exporter host-root mount
+  requires propagation that WSL2 does not provide for `/`. Do not leave its
+  DaemonSet failing. Use kubelet/cAdvisor for workload CPU and memory and
+  kube-state-metrics for restart and object state. Windows host telemetry is
+  explicitly outside this milestone.
+- **Internal telemetry:** Prometheus and Grafana remain ClusterIP-only. Grafana
+  anonymous Viewer access relies on the documented localhost-only port-forward.
 - **Validated tailnet path:** an enrolled Android browser reached only the
   Gateway through a temporary Windows portproxy bound to the Windows Tailscale
   IP. Its inbound Firewall rule allowed only that Android Tailscale IP. HTTP
@@ -153,9 +179,10 @@ network contract between the two releases.
   after the terminal SSE event is received. Canceled or failed turns remain
   visible for operator feedback but are not sent as subsequent context.
 - **Gateway administration boundary:** Envoy admin port 9901 is omitted from
-  the Service but binds the Pod interface so kubelet can run readiness and
-  liveness probes. It is therefore reachable inside the cluster Pod network;
-  no NetworkPolicy isolation is claimed at this stage.
+  the Service but binds the Pod interface so kubelet can run probes and the
+  monitoring-namespace Prometheus can scrape it through a PodMonitor. It is
+  reachable inside the cluster Pod network; no public exposure or NetworkPolicy
+  isolation is claimed at this stage.
 - **Browser-origin boundary:** the ClusterIP-only inference server restricts
   CORS to localhost and disables CORS credentials. Gateway browser calls are
   same-origin, so the Gateway does not add broad CORS. It has no application

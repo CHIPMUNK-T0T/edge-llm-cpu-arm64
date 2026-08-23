@@ -1,0 +1,12 @@
+apiVersion: v2
+name: edge-llm-monitoring
+description: Scoped Prometheus and Grafana monitoring for the ARM64 K3s serving lab
+type: application
+version: 0.1.0
+appVersion: "1.0"
+annotations:
+  monitoring.edge-llm.io/upstream-oci-digest: sha256:3f2b01fe1b3f0e2bb957c2d6bf664ace5ceab6a2119377d132aced8b2087e8cc
+dependencies:
+  - name: kube-prometheus-stack
+    version: 87.21.0
+    repository: oci://ghcr.io/prometheus-community/charts

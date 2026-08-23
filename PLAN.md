@@ -187,21 +187,62 @@ plus [Android same-Wi-Fi tailnet verification](docs/verification/tailscale-andro
 
 ## Phase 4 — Observability and benchmarks
 
-**Status:** pending.
+**Status:** in progress. Operational monitoring passed on 2026-08-23;
+controlled performance benchmarks remain.
 
-- Collect request/error counts, latency percentiles, TTFT, inter-token latency,
-  tokens/sec, CPU, memory, restarts, and OOM events where measurable.
-- Compare direct, container, and K3s execution only with controlled settings.
-- Commit scripts and raw CSV/JSON; explain limitations in written conclusions.
+Completed:
+
+- Added a digest-pinned `kube-prometheus-stack` wrapper with one Prometheus,
+  one Grafana, and kube-state-metrics on the ARM64 node.
+- Added internal ServiceMonitor and PodMonitor contracts for llama.cpp and
+  Envoy without publishing operational endpoints.
+- Provisioned a read-only serving dashboard and local-path persistence with
+  seven-day Prometheus retention.
+- Verified non-empty CPU, memory, Gateway request, 4xx, upstream latency,
+  inference activity, token throughput, and Pod restart series.
+- Measured a 54m CPU and 557 MiB monitoring snapshot after startup.
+- Removed the WSL2-incompatible node-exporter DaemonSet from the final
+  definition and recorded the kubelet/cAdvisor trade-off.
+
+Remaining:
+
+- Measure TTFT, inter-token latency, tokens/sec, long-context memory behavior,
+  and controlled concurrency with committed inputs and raw results.
+- Compare execution modes only where settings and measurement boundaries can
+  be held constant; explain limitations in written conclusions.
 
 ## Phase 5 — Failure drills and CI/CD
 
-**Status:** pending.
+**Status:** in progress. Gateway, inference, invalid model source, WSL restart,
+and Windows restart drills passed on 2026-08-23; resource-pressure cases remain.
 
-- Rehearse model path, permission, memory/OOM, probe, rollout, WSL restart,
-  Windows restart, and Tailscale connectivity scenarios.
+Completed:
+
+- Added repeatable recovery scripts with bounded waits, localhost-only probes,
+  explicit target selectors, and safety rollback for the configuration fault.
+- Deleted the Gateway Pod and measured 8,744 ms to external health recovery.
+- Deleted the inference Pod and measured 170,968 ms to external health recovery;
+  reloading the 17.5 GB model dominated the outage.
+- Injected a nonexistent model source, detected the `FailedMount` in 4,061 ms,
+  observed Gateway HTTP 503, and recovered through Helm rollback in 67,161 ms.
+- Terminated the WSL distribution, measured K3s API recovery in 10,488 ms and
+  Gateway health recovery in 253,859 ms, and proved both serving containers
+  restarted.
+- Restarted Windows after recording a baseline, verified a newer Windows boot
+  time and both serving-container restart counts increasing from 1 to 2, then
+  observed K3s API in 11,231 ms and Gateway health in 68,658 ms from
+  verification start.
+- Re-ran the monitoring live contract after WSL recovery; all eight metric
+  groups and 14 dashboard queries passed.
+
+Remaining:
+
+- Test permission, memory/OOM, malformed probes, rollout failure, and Tailscale
+  connectivity.
 - Add ARM64 builds, appropriate multi-architecture checks, Helm lint, manifest
   validation, tests, and API smoke tests in GitHub Actions.
+
+**Evidence:** [controlled recovery verification](docs/verification/recovery/controlled-recovery-2026-08-23.md).
 
 ## Definition of done
 
