@@ -1,5 +1,51 @@
 # Edge LLM Platform on ARM64
 
+> **AI infrastructure portfolio case study** — designing, operating, measuring,
+> and recovering a private LLM serving platform on a constrained ARM64 edge
+> machine.
+
+## 30-second overview
+
+This repository demonstrates end-to-end AI infrastructure engineering rather
+than only showing that a model can run. It treats one Surface Laptop 7 as a
+small on-premises customer environment and records the architecture,
+deployment contracts, operational tests, measured recovery behavior, and known
+limitations.
+
+| Constraint | Engineering response | Verified outcome |
+| --- | --- | --- |
+| Windows 11 ARM64, WSL2, CPU-only | Official ARM64 `llama-server`, GGUF model, K3s | Reproducible inference Pod and persistent model artifact |
+| Single-node customer-style environment | Helm as the serving source of truth | Upgrade, rollback, uninstall, and reinstall verified |
+| Private client access | Envoy Gateway and device-restricted Tailscale path | Browser chat, SSE, cancellation, and API contracts verified |
+| Limited operational visibility | Digest-pinned Prometheus and Grafana | CPU, memory, restarts, latency, errors, and token throughput measured |
+| Host and workload failures | Controlled recovery drills and bounded checks | WSL recovery: K3s API 10.5 s, external health 253.9 s |
+
+### What this demonstrates
+
+- **AI serving:** `llama.cpp` / `llama-server`, GGUF model lifecycle, streaming
+  OpenAI- and Anthropic-compatible APIs.
+- **Platform engineering:** K3s, Helm, Envoy Gateway, persistent storage,
+  deployment contracts, upgrade and rollback.
+- **Operations:** Prometheus, Grafana, health and API checks, controlled fault
+  injection, measured recovery.
+- **Engineering judgment:** explicit trust boundaries, pinned artifacts,
+  reproducible evidence, and honest single-node limitations.
+
+### Review paths
+
+- **Architecture:** [DESIGN.md](DESIGN.md)
+- **Milestones and remaining work:** [PLAN.md](PLAN.md)
+- **Measured recovery evidence:**
+  [controlled recovery report](docs/verification/recovery/controlled-recovery-2026-08-23.md)
+- **Deployment source of truth:** [Helm charts](charts/)
+- **Repeatable checks:** [tests](tests/) and [benchmark inputs](benchmark/)
+
+### Scope boundary
+
+This is a reproducible single-node lab and portfolio project. It does not claim
+high availability, production readiness, or security guarantees beyond the
+controls and failure cases documented in this repository.
+
 Technical portfolio project for an AI-serving platform in a constrained,
 single-node, on-premises-style environment.
 
