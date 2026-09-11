@@ -1,5 +1,34 @@
 # Edge LLM Platform on ARM64
 
+> **AIインフラ技術ポートフォリオ** — 制約のあるARM64 edge環境で、
+> privateなLLM serving基盤を設計・構築し、運用・計測・復旧まで検証した記録です。
+
+## 30秒でわかること
+
+このリポジトリが示すのは「モデルが動いた」ことではありません。
+Surface Laptop 7を小さなon-premises顧客環境に見立て、
+**アーキテクチャ、再現可能なデプロイ、可観測性、upgrade/rollback、
+障害時の復旧時間、成立しない条件**まで証拠として残しています。
+
+| 制約・課題 | 技術的な対応 | 確認した結果 |
+| --- | --- | --- |
+| Windows 11 ARM64 / WSL2 / CPU-only | ARM64 `llama-server`、GGUF、K3s | 推論Podと永続モデルartifactを再現可能に構築 |
+| single-nodeの顧客環境 | Helmをserving構成のsource of truthに統一 | upgrade、rollback、uninstall、reinstallを検証 |
+| 外部公開せずprivate access | Envoy Gatewayと端末制限付きTailscale経路 | browser chat、SSE、cancel、API contractを検証 |
+| 障害時の挙動が不明 | controlled recovery drillとメトリクス計測 | WSL復旧: K3s API **10.5秒**、外部health **253.9秒** |
+
+### このリポジトリで示している技術力
+
+- **Serving Infrastructure:** K3s、Helm、Envoy Gateway、persistent storage
+- **運用設計:** Prometheus/Grafana、health/API check、upgrade/rollback、障害復旧
+- **制約下の判断:** ARM64互換性、CPU-only、single-node、private access
+- **検証の再現性:** pinned artifact、copy-paste可能な手順、実測値、既知の限界
+
+これはsingle-node labとしての技術検証であり、高可用性、production readiness、
+未検証のsecurity guaranteeは主張しません。
+
+---
+
 > **AI infrastructure portfolio case study** — designing, operating, measuring,
 > and recovering a private LLM serving platform on a constrained ARM64 edge
 > machine.
